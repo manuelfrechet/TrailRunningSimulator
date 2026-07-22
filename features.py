@@ -8,6 +8,14 @@ def build_features(record_df: pd.DataFrame) -> pd.DataFrame:
     
     if df.empty:
         return df
+
+    # Standardize names
+    rename_map = {
+        "enhanced_speed": "speed_m_s",
+        "enhanced_altitude": "altitude_m",
+        "heart_rate": "heart_rate_bpm",
+    }
+    df = df.rename(columns=rename_map)
     
     if "timestamp" in df.columns:
         df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
