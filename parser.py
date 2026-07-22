@@ -1,4 +1,3 @@
-from io import BytesIO
 from typing import Any, Dict, List
 
 import fitdecode
@@ -72,40 +71,3 @@ def parse_fit_to_tables(fit_source: Any) -> Dict[str, pd.DataFrame]:
         dfs[message_type] = df
 
     return dfs
-
-def _excel_safe_value(value: Any) -> Any:
-    if value is None:
-        return None
-
-    if isinstance(value, pd.Timestamp):
-        if value.tz is not None:
-            return value.tz_localize(None)
-        return value.to_pydatetime()
-
-    if isinstance(value, datetime):
-        if value.tzinfo is not None:
-            return value.replace(tzinfo=None)
-        return value
-
-    if isinstance(value, (date, time)):
-        return value
-
-    if isinstance(value, (bytes, bytearray, list, dict, set, tuple)):
-        return str(value)
-
-    return value
-
-def tables_to_excel_bytes(tables: Dict[str, pd.DataFrame]) -> bytes:
-    output = BytesIO()
-
-    with pd.ExcelWriter(output, engine="openpyxl") as writer:
-        for sheet_name, df in tables.items():
-            safe_sheet_name = sheet_name[:31] if sheet_name else "sheet"
-
-            safe_df = df.copy()
-            for col in safe_df.columns:
-                safe_df[col] = safe_df[col].map(_excel_safe_value)
-
-            safe_df.to_excel(writer, index=False, sheet_name=safe_sheet_name)
-
-    return output.getvalue()
