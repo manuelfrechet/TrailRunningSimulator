@@ -48,30 +48,30 @@ def _frame_to_row(frame: Any) -> Dict[str, Any]:
 def parse_fit_to_tables(fit_source: Any) -> Dict[str, pd.DataFrame]:
     tables: Dict[str, List[Dict[str, Any]]] = {}
 
-with fitdecode.FitReader(fit_source) as fit:
-    for frame in fit:
-        if frame.frame_type != fitdecode.FIT_FRAME_DATA:
-            continue
+    with fitdecode.FitReader(fit_source) as fit:
+        for frame in fit:
+            if frame.frame_type != fitdecode.FIT_FRAME_DATA:
+                continue
 
-        row = _frame_to_row(frame)
-        message_type = frame.name
+            row = _frame_to_row(frame)
+            message_type = frame.name
 
-        if message_type not in tables:
-            tables[message_type] = []
+            if message_type not in tables:
+                tables[message_type] = []
 
-        tables[message_type].append(row)
+            tables[message_type].append(row)
 
-dfs: Dict[str, pd.DataFrame] = {}
+    dfs: Dict[str, pd.DataFrame] = {}
 
-for message_type, rows in tables.items():
-    df = pd.DataFrame(rows)
+    for message_type, rows in tables.items():
+        df = pd.DataFrame(rows)
 
-    if not df.empty and "timestamp" in df.columns:
-        df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
+        if not df.empty and "timestamp" in df.columns:
+            df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
 
-    dfs[message_type] = df
+        dfs[message_type] = df
 
-return dfs
+    return dfs
 
 def tables_to_excel_bytes(tables: Dict[str, pd.DataFrame]) -> bytes:
     output = BytesIO()
