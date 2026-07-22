@@ -26,15 +26,15 @@ features_df = build_features(record_df)
 
 st.subheader("Preview: Raw records")
 
-if record_df.empty:
-    st.warning("No record messages were found in this FIT file.")
-else:
-    st.dataframe(record_df.head(50), use_container_width=True)
-    st.write(f"Number of record rows: {len(record_df)}")
+#if record_df.empty:
+#    st.warning("No record messages were found in this FIT file.")
+#else:
+#    st.dataframe(record_df.head(50), use_container_width=True)
+#    st.write(f"Number of record rows: {len(record_df)}")
 
 st.subheader("Preview: featured records")
 
 if features_df.empty:
     st.warning("No features could be computed.")
 else:
-    st.dataframe(features_df.head(50), width="stretch")
+    st.dataframe(features_df, width="stretch")
