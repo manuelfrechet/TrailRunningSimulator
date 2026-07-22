@@ -6,6 +6,7 @@ import pandas as pd
 SEMICIRCLES_TO_DEGREES = 180.0 / (2**31)
 
 PREFERRED_COLUMN_ORDER = [
+"activity_type",
 "timestamp",
 "position_lat",
 "latitude_deg",
@@ -14,18 +15,17 @@ PREFERRED_COLUMN_ORDER = [
 "distance",
 "enhanced_speed",
 "enhanced_altitude",
-"power",
-"heart_rate",
-"cadence",
 "temperature",
-"activity_type",
-"fractional_cadence",
-"cycle_length16",
+"heart_rate",
+"power",
 "accumulated_power",
-"vertical_oscillation",
-"stance_time",
-"vertical_ratio",
+"cadence",
+"fractional_cadence",
 "step_length",
+"stance_time",
+"vertical_oscillation",
+"vertical_ratio",
+"cycle_length16",
 "message_type",
 ]
 
