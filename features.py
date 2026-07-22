@@ -17,7 +17,8 @@ def build_features(record_df: pd.DataFrame) -> pd.DataFrame:
         "distance": "distance_from_start_m",
         "elapse_s": "time_from_start_s",
         "step_length": "step_lenght_m",
-        "stance_time": "stance_time_s"
+        "stance_time": "stance_time_s",
+        "vertical_oscillation": "vertical_oscillation_mm"
     }
     df = df.rename(columns=rename_map)
 
@@ -95,7 +96,7 @@ def build_features(record_df: pd.DataFrame) -> pd.DataFrame:
     "cadence_spm",
     "step_length_m",
     "stance_time_s",
-    "vertical_oscillation",
+    "vertical_oscillation_mm",
     "vertical_ratio",
     ]
 
