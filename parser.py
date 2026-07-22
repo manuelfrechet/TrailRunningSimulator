@@ -13,7 +13,7 @@ def _make_unique_key(base_key: str, existing_keys: set[str]) -> str:
 counter = 2
 while f"{base_key}_{counter}" in existing_keys:
     counter += 1
-    return f"{base_key}_{counter}"
+return f"{base_key}_{counter}"
 
 def _semicircles_to_degrees(value: Any) -> Any:
     if value is None:
