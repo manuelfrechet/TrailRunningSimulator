@@ -14,9 +14,22 @@ def build_features(record_df: pd.DataFrame) -> pd.DataFrame:
         "enhanced_speed": "speed_m_s",
         "enhanced_altitude": "altitude_m",
         "heart_rate": "heart_rate_bpm",
-        "distance": "distance_from_start",
+        "distance": "distance_from_start_m",
     }
     df = df.rename(columns=rename_map)
+
+    # Cadence in steps per minute
+    if "cadence" in df.columns:
+        cadence = pd.to_numeric(df["cadence"], errors="coerce")
+    else:
+        cadence = pd.Series(pd.NA, index=df.index, dtype="float64")
+
+    if "fractional_cadence" in df.columns:
+        fractional_cadence = pd.to_numeric(df["fractional_cadence"], errors="coerce")
+    else:
+        fractional_cadence = pd.Series(0.0, index=df.index, dtype="float64")
+
+    df["cadence_spm"] = (cadence + fractional_cadence) * 2.0
     
     if "timestamp" in df.columns:
         df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
