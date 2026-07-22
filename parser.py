@@ -75,7 +75,7 @@ def parse_fit_to_tables(fit_source: Any) -> Dict[str, pd.DataFrame]:
 
 def _excel_safe_value(value: Any) -> Any:
     if value is None:
-    return None
+        return None
 
     if isinstance(value, pd.Timestamp):
         if value.tz is not None:
