@@ -70,5 +70,9 @@ def build_features(record_df: pd.DataFrame) -> pd.DataFrame:
     if "altitude_m" in df.columns:
         df["cumulative_ascent_m"] = df["altitude_delta_m"].clip(lower=0).fillna(0).cumsum()
         df["cumulative_descent_m"] = (-df["altitude_delta_m"].clip(upper=0)).fillna(0).cumsum()
+
+    # Cumulative ascent/descent from start
+    df["ascent_cumul_from_start_m"] = df["ascent_delta_m"].fillna(0).cumsum()
+    df["descent_cumul_from_start_m"] = df["descent_delta_m"].fillna(0).cumsum()
     
     return df
