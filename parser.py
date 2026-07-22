@@ -10,10 +10,11 @@ def _make_unique_key(base_key: str, existing_keys: set[str]) -> str:
     if base_key not in existing_keys:
         return base_key
 
-counter = 2
-while f"{base_key}_{counter}" in existing_keys:
-    counter += 1
-return f"{base_key}_{counter}"
+    counter = 2
+    while f"{base_key}_{counter}" in existing_keys:
+        counter += 1
+        
+    return f"{base_key}_{counter}"
 
 def _semicircles_to_degrees(value: Any) -> Any:
     if value is None:
