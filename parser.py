@@ -10,24 +10,29 @@ def _make_unique_key(base_key: str, existing_keys: set[str]) -> str:
 if base_key not in existing_keys:
 return base_key
 
+
 counter = 2
 while f"{base_key}_{counter}" in existing_keys:
     counter += 1
 
 return f"{base_key}_{counter}"
 
+
 def _semicircles_to_degrees(value: Any) -> Any:
 if value is None:
 return None
 
+```
 if isinstance(value, (int, float)):
     return float(value) * SEMICIRCLES_TO_DEGREES
 
 return value
 
+
 def _frame_to_row(frame: Any) -> Dict[str, Any]:
 row: Dict[str, Any] = {}
 existing_keys: set[str] = set()
+
 
 for field in frame.fields:
     base_key = str(field.name_or_num)
@@ -45,8 +50,10 @@ if "position_long" in row:
 
 return row
 
+
 def parse_fit_to_tables(fit_source: Any) -> Dict[str, pd.DataFrame]:
 tables: Dict[str, List[Dict[str, Any]]] = {}
+
 
 with fitdecode.FitReader(fit_source) as fit:
     for frame in fit:
@@ -73,8 +80,10 @@ for message_type, rows in tables.items():
 
 return dfs
 
+
 def tables_to_excel_bytes(tables: Dict[str, pd.DataFrame]) -> bytes:
 output = BytesIO()
+
 
 with pd.ExcelWriter(output, engine="openpyxl") as writer:
     for sheet_name, df in tables.items():
