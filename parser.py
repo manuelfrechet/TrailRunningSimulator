@@ -1,106 +1,104 @@
 from **future** import annotations
 
-from typing import Any, Optional
+from io import BytesIO
+from typing import Any, Dict, List
 
 import pandas as pd
 import fitdecode
 
-SEMICIRCLES_TO_DEGREES = 360.0 / (2**32)
+SEMICIRCLES_TO_DEGREES = 180.0 / (2**31)
 
-def _safe_value(frame: Any, field_name: str, fallback: Any = None) -> Any:
-"""
-Read a FIT field safely.
+def _make_unique_key(base_key: str, existing_keys: set[str]) -> str:
+if base_key not in existing_keys:
+return base_key
 
-```
-fitdecode documents `get_value(..., fallback=...)`, so this lets us ask for
-a field even when it may be absent in a given record.
-"""
-try:
-    return frame.get_value(field_name, fallback=fallback)
-except Exception:
-    return fallback
-```
+counter = 2
+while f"{base_key}_{counter}" in existing_keys:
+    counter += 1
 
-def _semicircles_to_degrees(value: Any) -> Optional[float]:
-"""
-FIT GPS coordinates are commonly stored as semicircles.
+return f"{base_key}_{counter}"
 
-```
-If the value is numeric, convert it to decimal degrees.
-Otherwise return None.
-"""
+def _semicircles_to_degrees(value: Any) -> Any:
 if value is None:
-    return None
+return None
 
 if isinstance(value, (int, float)):
     return float(value) * SEMICIRCLES_TO_DEGREES
 
-return None
-```
+return value
 
-def parse_fit_to_dataframe(file_path: str) -> pd.DataFrame:
+def _frame_to_row(frame: Any) -> Dict[str, Any]:
 """
-Parse one FIT file and return a pandas DataFrame.
-
-```
-This first version keeps only record messages (the track points) and extracts
-the most useful fields for the historical analysis phase.
+Convert one FIT data frame into a dictionary of field_name -> value.
 """
-rows = []
+row: Dict[str, Any] = {}
+existing_keys: set[str] = set()
 
-with fitdecode.FitReader(file_path) as fit:
+for field in frame.fields:
+    base_key = str(field.name_or_num)
+    key = _make_unique_key(base_key, existing_keys)
+    existing_keys.add(key)
+    row[key] = field.value
+
+# Add a readable message type column.
+row["message_type"] = frame.name
+
+# Add human-friendly GPS coordinates when available.
+if "position_lat" in row:
+    row["latitude_deg"] = _semicircles_to_degrees(row["position_lat"])
+
+if "position_long" in row:
+    row["longitude_deg"] = _semicircles_to_degrees(row["position_long"])
+
+return row
+
+def parse_fit_to_tables(fit_source: Any) -> Dict[str, pd.DataFrame]:
+"""
+Parse a FIT file into one DataFrame per message type.
+
+Example keys:
+- record
+- session
+- lap
+- event
+- activity
+"""
+tables: Dict[str, List[Dict[str, Any]]] = {}
+
+with fitdecode.FitReader(fit_source) as fit:
     for frame in fit:
-        # Keep only FIT data messages.
         if frame.frame_type != fitdecode.FIT_FRAME_DATA:
             continue
 
-        # For activity files, the track-point messages are usually named "record".
-        # If your file behaves differently, we will adjust after the first test.
-        if frame.name != "record":
-            continue
+        row = _frame_to_row(frame)
+        message_type = frame.name
 
-        lat_raw = _safe_value(frame, "position_lat")
-        lon_raw = _safe_value(frame, "position_long")
+        if message_type not in tables:
+            tables[message_type] = []
 
-        row = {
-            "timestamp": _safe_value(frame, "timestamp"),
-            "latitude": _semicircles_to_degrees(lat_raw),
-            "longitude": _semicircles_to_degrees(lon_raw),
-            "distance_m": _safe_value(frame, "distance"),
-            "altitude_m": _safe_value(frame, "enhanced_altitude", _safe_value(frame, "altitude")),
-            "speed_m_s": _safe_value(frame, "enhanced_speed", _safe_value(frame, "speed")),
-            "heart_rate_bpm": _safe_value(frame, "heart_rate"),
-            "cadence_rpm": _safe_value(frame, "cadence"),
-            "temperature_c": _safe_value(frame, "temperature"),
-        }
+        tables[message_type].append(row)
 
-        rows.append(row)
+dfs: Dict[str, pd.DataFrame] = {}
 
-df = pd.DataFrame(rows)
+for message_type, rows in tables.items():
+    df = pd.DataFrame(rows)
 
-if not df.empty and "timestamp" in df.columns:
-    df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
+    if not df.empty and "timestamp" in df.columns:
+        df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
 
-return df
-```
+    dfs[message_type] = df
 
-def fit_to_csv(file_path: str, output_csv_path: str) -> pd.DataFrame:
+return dfs
+
+def tables_to_excel_bytes(tables: Dict[str, pd.DataFrame]) -> bytes:
 """
-Convenience helper: parse a FIT file and write a CSV.
+Convert a dictionary of DataFrames into an Excel workbook in memory.
 """
-df = parse_fit_to_dataframe(file_path)
-df.to_csv(output_csv_path, index=False)
-return df
+output = BytesIO()
 
-def fit_to_excel(file_path: str, output_xlsx_path: str) -> pd.DataFrame:
-"""
-Convenience helper: parse a FIT file and write an Excel file.
-"""
-df = parse_fit_to_dataframe(file_path)
+with pd.ExcelWriter(output, engine="openpyxl") as writer:
+    for sheet_name, df in tables.items():
+        safe_sheet_name = sheet_name[:31] if sheet_name else "sheet"
+        df.to_excel(writer, index=False, sheet_name=safe_sheet_name)
 
-```
-with pd.ExcelWriter(output_xlsx_path, engine="openpyxl") as writer:
-    df.to_excel(writer, index=False, sheet_name="records")
-
-return df
-```
+return output.getvalue()
