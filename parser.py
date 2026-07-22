@@ -113,6 +113,9 @@ def parse_fit_to_tables(fit_source: Any) -> Dict[str, pd.DataFrame]:
         if not df.empty and "timestamp" in df.columns:
             df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
 
+        if not df.empty:
+            df = df[_order_columns(list(df.columns))]
+            
         dfs[message_type] = df
 
     return dfs
