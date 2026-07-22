@@ -71,5 +71,29 @@ def build_features(record_df: pd.DataFrame) -> pd.DataFrame:
         df["cumulative_ascent_m"] = df["altitude_delta_m"].clip(lower=0).fillna(0).cumsum()
         df["cumulative_descent_m"] = (-df["altitude_delta_m"].clip(upper=0)).fillna(0).cumsum()
 
-    
-    return df
+    display_columns = [
+    "timestamp",
+    "time_from_start_s",
+    "latitude_deg",
+    "longitude_deg",
+    "distance",
+    "distance_delta_m",
+    "altitude_m",
+    "altitude_delta_m",
+    "ascent_delta_m",
+    "descent_delta_m",
+    "ascent_cumul_from_start_m",
+    "descent_cumul_from_start_m",
+    "grade_pct",
+    "speed_m_s",
+    "speed_m_s_from_distance",
+    "pace_min_km_from_distance",
+    "heart_rate_bpm",
+    "cadence_spm",
+    "power",
+    "temperature",
+    ]
+
+    existing_columns = [c for c in display_columns if c in df.columns]
+
+    return df[existing_columns]
