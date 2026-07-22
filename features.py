@@ -47,8 +47,8 @@ def build_features(record_df: pd.DataFrame) -> pd.DataFrame:
         df["altitude_delta_m"] = df["altitude_m"].diff()
 
     # Ascent / descent deltas from previous record
-    df["ascent_delta_m"] = df["altitude_delta_m"].clip(lower=0)
-    df["descent_delta_m"] = (-df["altitude_delta_m"].clip(upper=0))
+    # df["ascent_delta_m"] = df["altitude_delta_m"].clip(lower=0)
+    # df["descent_delta_m"] = (-df["altitude_delta_m"].clip(upper=0))
 
     
     if "distance_m" in df.columns and "timestamp" in df.columns:
