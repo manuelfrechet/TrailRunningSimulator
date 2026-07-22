@@ -37,4 +37,4 @@ st.subheader("Preview: featured records")
 if features_df.empty:
     st.warning("No features could be computed.")
 else:
-    st.dataframe(features_df.head(20), width="stretch")
+    st.dataframe(features_df, width="stretch")
