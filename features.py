@@ -50,6 +50,8 @@ def build_features(record_df: pd.DataFrame) -> pd.DataFrame:
     # df["ascent_delta_m"] = df["altitude_delta_m"].clip(lower=0)
     # df["descent_delta_m"] = (-df["altitude_delta_m"].clip(upper=0))
 
+    # Grade percentage
+    df["grade_pct"] = (df["altitude_delta_m"] / df["distance_delta_m"]) * 100.0
     
     if "distance_m" in df.columns and "timestamp" in df.columns:
         time_delta_s = df["timestamp"].diff().dt.total_seconds()
