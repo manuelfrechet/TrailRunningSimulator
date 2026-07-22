@@ -37,13 +37,15 @@ def build_features(record_df: pd.DataFrame) -> pd.DataFrame:
         df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
         df = df.sort_values("timestamp").reset_index(drop=True)
         df["time_from_start_s"] = (df["timestamp"] - df["timestamp"].iloc[0]).dt.total_seconds()
-    
+
+    #Delta distance
     if "distance_from_start_m" in df.columns:
         df["distance_delta_m"] = df["distance_from_start_m"].diff()
-    
+
+    #Delta altitude
     if "altitude_m" in df.columns:
         df["altitude_delta_m"] = df["altitude_m"].diff()
-    
+
     if "distance_m" in df.columns and "timestamp" in df.columns:
         time_delta_s = df["timestamp"].diff().dt.total_seconds()
         distance_delta_m = df["distance_m"].diff()
