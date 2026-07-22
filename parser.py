@@ -20,10 +20,10 @@ def _semicircles_to_degrees(value: Any) -> Any:
     if value is None:
         return None
 
-if isinstance(value, (int, float)):
-    return float(value) * SEMICIRCLES_TO_DEGREES
+    if isinstance(value, (int, float)):
+        return float(value) * SEMICIRCLES_TO_DEGREES
 
-return value
+    return value
 
 def _frame_to_row(frame: Any) -> Dict[str, Any]:
     row: Dict[str, Any] = {}
