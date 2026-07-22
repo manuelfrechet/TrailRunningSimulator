@@ -15,6 +15,7 @@ def build_features(record_df: pd.DataFrame) -> pd.DataFrame:
         "enhanced_altitude": "altitude_m",
         "heart_rate": "heart_rate_bpm",
         "distance": "distance_from_start_m",
+        "elapse_s": "time_from_start_s"
     }
     df = df.rename(columns=rename_map)
 
@@ -30,11 +31,12 @@ def build_features(record_df: pd.DataFrame) -> pd.DataFrame:
         fractional_cadence = pd.Series(0.0, index=df.index, dtype="float64")
 
     df["cadence_spm"] = (cadence + fractional_cadence) * 2.0
-    
+
+    #Time from start
     if "timestamp" in df.columns:
         df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
         df = df.sort_values("timestamp").reset_index(drop=True)
-        df["elapsed_s"] = (df["timestamp"] - df["timestamp"].iloc[0]).dt.total_seconds()
+        df["time_from_start_s"] = (df["timestamp"] - df["timestamp"].iloc[0]).dt.total_seconds()
     
     if "distance_m" in df.columns:
         df["distance_delta_m"] = df["distance_m"].diff()
