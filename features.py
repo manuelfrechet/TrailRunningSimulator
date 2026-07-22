@@ -3,17 +3,6 @@ from future import annotations
 import pandas as pd
 
 def build_features(record_df: pd.DataFrame) -> pd.DataFrame:
-  
-"""
-Build a first derived table from the raw FIT record table.
-Expected input columns when available:
-- timestamp
-- distance_m
-- altitude_m
-- heart_rate_bpm
-- cadence_rpm
-- speed_m_s
-"""
 
 df = record_df.copy()
 
