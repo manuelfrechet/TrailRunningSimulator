@@ -95,7 +95,6 @@ def build_features(record_df: pd.DataFrame) -> pd.DataFrame:
     "stance_time",
     "vertical_oscillation",
     "vertical_ratio",
-    "cycle_length16",
     ]
 
     existing_columns = [c for c in display_columns if c in df.columns]
