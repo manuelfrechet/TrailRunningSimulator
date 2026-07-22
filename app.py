@@ -1,5 +1,5 @@
-import streamlit as st
 import pandas as pd
+import streamlit as st
 
 from parser import parse_fit_to_tables, tables_to_excel_bytes
 
@@ -11,6 +11,7 @@ uploaded_file = st.file_uploader("Choose a FIT file", type=["fit"])
 if uploaded_file is not None:
     st.success(f"File received: {uploaded_file.name}")
 
+```
 uploaded_file.seek(0)
 tables = parse_fit_to_tables(uploaded_file)
 
@@ -34,3 +35,4 @@ st.download_button(
     file_name=uploaded_file.name.replace(".fit", ".xlsx"),
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 )
+```
