@@ -7,8 +7,8 @@ import pandas as pd
 SEMICIRCLES_TO_DEGREES = 180.0 / (2**31)
 
 def _make_unique_key(base_key: str, existing_keys: set[str]) -> str:
-    if base_key not in existing_keys:
-        return base_key
+if base_key not in existing_keys:
+    return base_key
 
 counter = 2
 while f"{base_key}_{counter}" in existing_keys:
@@ -17,8 +17,8 @@ while f"{base_key}_{counter}" in existing_keys:
 return f"{base_key}_{counter}"
 
 def _semicircles_to_degrees(value: Any) -> Any:
-    if value is None:
-        return None
+if value is None:
+    return None
 
 if isinstance(value, (int, float)):
     return float(value) * SEMICIRCLES_TO_DEGREES
