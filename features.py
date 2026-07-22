@@ -16,7 +16,8 @@ def build_features(record_df: pd.DataFrame) -> pd.DataFrame:
         "heart_rate": "heart_rate_bpm",
         "distance": "distance_from_start_m",
         "elapse_s": "time_from_start_s",
-        "step_length": "step_lenght_m"
+        "step_length": "step_lenght_m",
+        "stance_time": "stance_time_s"
     }
     df = df.rename(columns=rename_map)
 
@@ -92,8 +93,8 @@ def build_features(record_df: pd.DataFrame) -> pd.DataFrame:
     "accumulated_power",
     "temperature",
     "cadence_spm",
-    "step_length",
-    "stance_time",
+    "step_length_m",
+    "stance_time_s",
     "vertical_oscillation",
     "vertical_ratio",
     ]
