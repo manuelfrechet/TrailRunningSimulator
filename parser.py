@@ -1,14 +1,14 @@
 from io import BytesIO
 from typing import Any, Dict, List
 
-import pandas as pd
 import fitdecode
+import pandas as pd
 
 SEMICIRCLES_TO_DEGREES = 180.0 / (2**31)
 
 def _make_unique_key(base_key: str, existing_keys: set[str]) -> str:
 if base_key not in existing_keys:
-return base_key
+    return base_key
 
 
 counter = 2
@@ -20,9 +20,9 @@ return f"{base_key}_{counter}"
 
 def _semicircles_to_degrees(value: Any) -> Any:
 if value is None:
-return None
+    return None
 
-```
+
 if isinstance(value, (int, float)):
     return float(value) * SEMICIRCLES_TO_DEGREES
 
@@ -91,3 +91,4 @@ with pd.ExcelWriter(output, engine="openpyxl") as writer:
         df.to_excel(writer, index=False, sheet_name=safe_sheet_name)
 
 return output.getvalue()
+
