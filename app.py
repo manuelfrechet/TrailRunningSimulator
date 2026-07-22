@@ -19,6 +19,9 @@ uploaded_file.seek(0)
 tables = parse_fit_to_tables(uploaded_file)
 
 record_df = tables.get("record", pd.DataFrame())
+st.subheader("Raw record columns")
+st.write(list(record_df.columns))
+
 features_df = build_features(record_df)
 
 st.subheader("Preview: Raw records")
