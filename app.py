@@ -9,7 +9,7 @@ st.write("Upload a FIT file to see all useful raw data.")
 uploaded_file = st.file_uploader("Choose a FIT file", type=["fit"])
 
 if uploaded_file is not None:
-st.success(f"File received: {uploaded_file.name}")
+    st.success(f"File received: {uploaded_file.name}")
 
 uploaded_file.seek(0)
 tables = parse_fit_to_tables(uploaded_file)
