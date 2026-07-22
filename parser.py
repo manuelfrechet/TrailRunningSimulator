@@ -68,6 +68,27 @@ def _frame_to_row(frame: Any) -> Dict[str, Any]:
 
     return row
 
+def _order_columns(columns: List[str]) -> List[str]:
+    seen: set[str] = set()
+    ordered: List[str] = []
+
+    for col in PREFERRED_COLUMN_ORDER:
+        if col in columns and col not in seen:
+            ordered.append(col)
+            seen.add(col)
+
+    remaining_named = [col for col in columns if col not in seen and not col.isdigit()]
+    ordered.extend(remaining_named)
+    seen.update(remaining_named)
+
+    numeric_unknowns = sorted(
+        [col for col in columns if col not in seen and col.isdigit()],
+        key=lambda x: int(x),
+    )
+    ordered.extend(numeric_unknowns)
+
+    return ordered
+
 def parse_fit_to_tables(fit_source: Any) -> Dict[str, pd.DataFrame]:
     tables: Dict[str, List[Dict[str, Any]]] = {}
 
