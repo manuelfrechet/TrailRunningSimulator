@@ -29,21 +29,21 @@ def _frame_to_row(frame: Any) -> Dict[str, Any]:
     row: Dict[str, Any] = {}
     existing_keys: set[str] = set()
 
-for field in frame.fields:
-    base_key = str(field.name_or_num)
-    key = _make_unique_key(base_key, existing_keys)
-    existing_keys.add(key)
-    row[key] = field.value
+    for field in frame.fields:
+        base_key = str(field.name_or_num)
+        key = _make_unique_key(base_key, existing_keys)
+        existing_keys.add(key)
+        row[key] = field.value
 
-row["message_type"] = frame.name
+    row["message_type"] = frame.name
 
-if "position_lat" in row:
-    row["latitude_deg"] = _semicircles_to_degrees(row["position_lat"])
+    if "position_lat" in row:
+        row["latitude_deg"] = _semicircles_to_degrees(row["position_lat"])
 
-if "position_long" in row:
-    row["longitude_deg"] = _semicircles_to_degrees(row["position_long"])
+    if "position_long" in row:
+        row["longitude_deg"] = _semicircles_to_degrees(row["position_long"])
 
-return row
+    return row
 
 def parse_fit_to_tables(fit_source: Any) -> Dict[str, pd.DataFrame]:
     tables: Dict[str, List[Dict[str, Any]]] = {}
