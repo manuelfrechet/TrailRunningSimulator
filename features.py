@@ -74,9 +74,7 @@ def build_features(record_df: pd.DataFrame) -> pd.DataFrame:
     display_columns = [
     "timestamp",
     "time_from_start_s",
-    "latitude_deg",
-    "longitude_deg",
-    "distance",
+    "distance_from_start_m",
     "distance_delta_m",
     "altitude_m",
     "altitude_delta_m",
@@ -89,9 +87,15 @@ def build_features(record_df: pd.DataFrame) -> pd.DataFrame:
     "speed_m_s_from_distance",
     "pace_min_km_from_distance",
     "heart_rate_bpm",
-    "cadence_spm",
     "power",
+    "accumulated_power",
     "temperature",
+    "cadence_spm",
+    "step_length"
+    "stance_time"
+    "vertical_oscillation"
+    "vertical_ratio"
+    "cycle_length16"
     ]
 
     existing_columns = [c for c in display_columns if c in df.columns]
