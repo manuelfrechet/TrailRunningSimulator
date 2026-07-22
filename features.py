@@ -15,7 +15,8 @@ def build_features(record_df: pd.DataFrame) -> pd.DataFrame:
         "enhanced_altitude": "altitude_m",
         "heart_rate": "heart_rate_bpm",
         "distance": "distance_from_start_m",
-        "elapse_s": "time_from_start_s"
+        "elapse_s": "time_from_start_s",
+        "step_length": "step_lenght_m"
     }
     df = df.rename(columns=rename_map)
 
