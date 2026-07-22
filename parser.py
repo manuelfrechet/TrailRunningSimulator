@@ -26,8 +26,8 @@ if isinstance(value, (int, float)):
 return value
 
 def _frame_to_row(frame: Any) -> Dict[str, Any]:
-row: Dict[str, Any] = {}
-existing_keys: set[str] = set()
+    row: Dict[str, Any] = {}
+    existing_keys: set[str] = set()
 
 for field in frame.fields:
     base_key = str(field.name_or_num)
@@ -46,7 +46,7 @@ if "position_long" in row:
 return row
 
 def parse_fit_to_tables(fit_source: Any) -> Dict[str, pd.DataFrame]:
-tables: Dict[str, List[Dict[str, Any]]] = {}
+    tables: Dict[str, List[Dict[str, Any]]] = {}
 
 with fitdecode.FitReader(fit_source) as fit:
     for frame in fit:
@@ -74,7 +74,7 @@ for message_type, rows in tables.items():
 return dfs
 
 def tables_to_excel_bytes(tables: Dict[str, pd.DataFrame]) -> bytes:
-output = BytesIO()
+    output = BytesIO()
 
 with pd.ExcelWriter(output, engine="openpyxl") as writer:
     for sheet_name, df in tables.items():
