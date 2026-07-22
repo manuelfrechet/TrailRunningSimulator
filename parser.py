@@ -5,30 +5,6 @@ import pandas as pd
 
 SEMICIRCLES_TO_DEGREES = 180.0 / (2**31)
 
-PREFERRED_COLUMN_ORDER = [
-"activity_type",
-"timestamp",
-"position_lat",
-"latitude_deg",
-"position_long",
-"longitude_deg",
-"distance",
-"enhanced_speed",
-"enhanced_altitude",
-"temperature",
-"heart_rate",
-"power",
-"accumulated_power",
-"cadence",
-"fractional_cadence",
-"step_length",
-"stance_time",
-"vertical_oscillation",
-"vertical_ratio",
-"cycle_length16",
-"message_type",
-]
-
 def _make_unique_key(base_key: str, existing_keys: set[str]) -> str:
     if base_key not in existing_keys:
         return base_key
