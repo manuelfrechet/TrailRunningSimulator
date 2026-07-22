@@ -38,8 +38,8 @@ def build_features(record_df: pd.DataFrame) -> pd.DataFrame:
         df = df.sort_values("timestamp").reset_index(drop=True)
         df["time_from_start_s"] = (df["timestamp"] - df["timestamp"].iloc[0]).dt.total_seconds()
     
-    if "distance_m" in df.columns:
-        df["distance_delta_m"] = df["distance_m"].diff()
+    if "distance_from_start_m" in df.columns:
+        df["distance_delta_m"] = df["distance_from_start_m"].diff()
     
     if "altitude_m" in df.columns:
         df["altitude_delta_m"] = df["altitude_m"].diff()
