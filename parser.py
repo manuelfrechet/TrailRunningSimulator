@@ -76,9 +76,9 @@ def parse_fit_to_tables(fit_source: Any) -> Dict[str, pd.DataFrame]:
 def tables_to_excel_bytes(tables: Dict[str, pd.DataFrame]) -> bytes:
     output = BytesIO()
 
-with pd.ExcelWriter(output, engine="openpyxl") as writer:
-    for sheet_name, df in tables.items():
-        safe_sheet_name = sheet_name[:31] if sheet_name else "sheet"
-        df.to_excel(writer, index=False, sheet_name=safe_sheet_name)
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        for sheet_name, df in tables.items():
+            safe_sheet_name = sheet_name[:31] if sheet_name else "sheet"
+            df.to_excel(writer, index=False, sheet_name=safe_sheet_name)
 
-return output.getvalue()
+    return output.getvalue()
