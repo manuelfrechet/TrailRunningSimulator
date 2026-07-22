@@ -1,4 +1,4 @@
-from **future** import annotations
+from future import annotations
 
 import pandas as pd
 
