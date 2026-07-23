@@ -80,7 +80,7 @@ def parse_gpx_to_table(gpx_source: Any) -> pd.DataFrame:
                   previous_point.elevation is None
                   or point.elevation is None
               ):
-                  altitude_delat_m = None
+                  altitude_delta_m = None
               else:
                   altitude_delta_m = point.elevation - previous_point.elevation
   
