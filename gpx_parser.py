@@ -76,13 +76,11 @@ def parse_gpx_to_table(gpx_source: Any) -> pd.DataFrame:
                   )
                   cumulative_distance_m += distance_delta_m
 
-              if (
-                  previous_point.elevation is None
-                  or point.elevation is None
-              ):
+              previous_elevation = getattr(previous_point, "elevation", None)
+              if previous_elevation is None or current_elevation is None:
                   altitude_delta_m = None
               else:
-                  altitude_delta_m = point.elevation - previous_point.elevation
+                  altitude_delta_m = current_elevation - previous_elevation
   
               row = {
                   "point_index": point_index,
