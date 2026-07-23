@@ -20,7 +20,7 @@ PREFERRED_COLUMN_ORDER = [
 
 def _build_target_distances(max_distance_m: float, segment_length_m: float) -> List[float]:
   if segment_length_m <= 0:
-    raise ValueError("segment_length_m must be greater than 0")
+  raise ValueError("segment_length_m must be greater than 0")
   
   max_distance_m = max(0.0, float(max_distance_m))
   
