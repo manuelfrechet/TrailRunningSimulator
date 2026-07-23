@@ -57,13 +57,15 @@ def parse_gpx_to_table(gpx_source: Any) -> pd.DataFrame:
   point_index = 0
   
   for track_index, track in enumerate(gpx.tracks, start=1):
-      track_name = getattr(track, "name", None)
+      #track_name = getattr(track, "name", None)
   
       for segment_index, segment in enumerate(track.segments, start=1):
           previous_point = None
           cumulative_distance_m = 0.0
   
           for point_index_in_segment, point in enumerate(segment.points, start=1):
+              current_elevation = getattr(point, "elevation", None)
+            
               if previous_point is None:
                   distance_delta_m = 0.0
                   altitude_delta_m = 0.0
