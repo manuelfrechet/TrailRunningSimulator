@@ -38,3 +38,47 @@ if features_df.empty:
     st.warning("No features could be computed.")
 else:
     st.dataframe(features_df, width="stretch")
+
+#Import GPX
+import pandas as pd
+import streamlit as st
+
+from features import build_features
+from gpx_parser import parse_gpx_to_table
+from parser import parse_fit_to_tables
+
+st.title("Trail Running Simulator")
+
+st.subheader("1) Historical race FIT file")
+uploaded_fit = st.file_uploader("Choose a FIT file", type=["fit"], key="fit_uploader")
+
+if uploaded_fit is not None:
+    st.success(f"FIT file received: {uploaded_fit.name}")
+
+    uploaded_fit.seek(0)
+    fit_tables = parse_fit_to_tables(uploaded_fit)
+    record_df = fit_tables.get("record", pd.DataFrame())
+    features_df = build_features(record_df)
+
+    st.subheader("Features table from FIT")
+    if features_df.empty:
+        st.warning("No features could be computed from this FIT file.")
+    else:
+        st.dataframe(features_df, width="stretch")
+
+st.divider()
+
+st.subheader("2) Future race GPX file")
+uploaded_gpx = st.file_uploader("Choose a GPX file", type=["gpx"], key="gpx_uploader")
+
+if uploaded_gpx is not None:
+    st.success(f"GPX file received: {uploaded_gpx.name}")
+
+    uploaded_gpx.seek(0)
+    gpx_df = parse_gpx_to_table(uploaded_gpx)
+
+    st.subheader("Raw GPX table")
+    if gpx_df.empty:
+        st.warning("No track points were found in this GPX file.")
+    else:
+        st.dataframe(gpx_df, width="stretch")
