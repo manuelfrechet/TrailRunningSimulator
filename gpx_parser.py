@@ -16,9 +16,10 @@ PREFERRED_COLUMN_ORDER = [
 "timestamp",
 "latitude_deg",
 "longitude_deg",
-"elevation_m",
+"altitude_m",
+"altitude_delta_m",
 "distance_delta_m",
-"cumulative_distance_m",
+"distance_from_start_m",
 ]
 
 def _haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -65,6 +66,7 @@ def parse_gpx_to_table(gpx_source: Any) -> pd.DataFrame:
           for point_index_in_segment, point in enumerate(segment.points, start=1):
               if previous_point is None:
                   distance_delta_m = 0.0
+                  altitude_delta_m = 0.0
               else:
                   distance_delta_m = _haversine_m(
                       previous_point.latitude,
@@ -73,6 +75,14 @@ def parse_gpx_to_table(gpx_source: Any) -> pd.DataFrame:
                       point.longitude,
                   )
                   cumulative_distance_m += distance_delta_m
+
+              if (
+                  previous_point.elevation is None
+                  or point.elevation is None
+              ):
+                  altitude_delat_m = None
+              else:
+                  altitude_delta_m = point.elevation - previous_point.elevation
   
               row = {
                   "point_index": point_index,
@@ -82,9 +92,10 @@ def parse_gpx_to_table(gpx_source: Any) -> pd.DataFrame:
                   "timestamp": point.time,
                   "latitude_deg": point.latitude,
                   "longitude_deg": point.longitude,
-                  "elevation_m": point.elevation,
+                  "altitude_m": point.elevation,
+                  "altitude_delta_m": altitude_delta_m,
                   "distance_delta_m": distance_delta_m,
-                  "cumulative_distance_m": cumulative_distance_m,
+                  "distance_from_start_m": cumulative_distance_m,
               }
   
               rows.append(row)
