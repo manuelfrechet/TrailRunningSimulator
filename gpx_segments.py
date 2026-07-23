@@ -50,7 +50,7 @@ def _order_columns(columns: List[str]) -> List[str]:
 
 def _interpolate_numeric(group: pd.DataFrame, column: str, target_distances: List[float]) -> pd.Series:
   if column not in group.columns:
-  return pd.Series([float("nan")] * len(target_distances), index=target_distances, dtype="float64")
+    return pd.Series([float("nan")] * len(target_distances), index=target_distances, dtype="float64")
   
   source = group[["distance_from_start_m", column]].copy()
   source["distance_from_start_m"] = pd.to_numeric(source["distance_from_start_m"], errors="coerce")
@@ -75,7 +75,7 @@ def _interpolate_numeric(group: pd.DataFrame, column: str, target_distances: Lis
 
 def _interpolate_datetime(group: pd.DataFrame, column: str, target_distances: List[float]) -> pd.Series:
   if column not in group.columns:
-  return pd.Series([pd.NaT] * len(target_distances), index=target_distances)
+    return pd.Series([pd.NaT] * len(target_distances), index=target_distances)
   
   source = group[["distance_from_start_m", column]].copy()
   source["distance_from_start_m"] = pd.to_numeric(source["distance_from_start_m"], errors="coerce")
@@ -101,7 +101,7 @@ def _interpolate_datetime(group: pd.DataFrame, column: str, target_distances: Li
 
 def build_fixed_distance_segments(gpx_df: pd.DataFrame, segment_length_m: float = 10.0) -> pd.DataFrame:
   if gpx_df.empty or "distance_from_start_m" not in gpx_df.columns:
-  return pd.DataFrame(columns=PREFERRED_COLUMN_ORDER)
+    return pd.DataFrame(columns=PREFERRED_COLUMN_ORDER)
   
   working = gpx_df.copy()
   working["distance_from_start_m"] = pd.to_numeric(working["distance_from_start_m"], errors="coerce").round(6)
