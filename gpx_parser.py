@@ -18,8 +18,8 @@ PREFERRED_COLUMN_ORDER = [
 "longitude_deg",
 "altitude_m",
 "altitude_delta_m",
-"distance_delta_m",
 "distance_from_start_m",
+"distance_delta_m",
 ]
 
 def _haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -94,8 +94,8 @@ def parse_gpx_to_table(gpx_source: Any) -> pd.DataFrame:
                   "longitude_deg": point.longitude,
                   "altitude_m": point.elevation,
                   "altitude_delta_m": altitude_delta_m,
-                  "distance_delta_m": distance_delta_m,
                   "distance_from_start_m": cumulative_distance_m,
+                  "distance_delta_m": distance_delta_m,
               }
   
               rows.append(row)
