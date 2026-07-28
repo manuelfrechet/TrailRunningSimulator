@@ -6,6 +6,8 @@ from parser import parse_fit_to_tables
 from gpx_parser import parse_gpx_to_table
 from gpx_segments import build_fixed_distance_segments
 
+SEGMENT_LENGTH_M = 50.0
+
 st.title("Trail Running Simulator")
 
 #Upload for .FIT file
@@ -44,7 +46,7 @@ if uploaded_gpx is not None:
 
     gpx_segments_df = build_fixed_distance_segments(
         gpx_raw_df,
-        segment_length_m=10.0,
+        segment_length_m=SEGMENT_LENGTH_M,
     )
 
     st.subheader("Raw GPX table")
