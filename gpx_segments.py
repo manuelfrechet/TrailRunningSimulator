@@ -9,6 +9,11 @@ PREFERRED_COLUMN_ORDER = [
 "distance_from_start_m",
 "altitude_m",
 "altitude_delta_m",
+"ascent_delta_m",
+"descent_delta_m",
+"ascent_cumul_from_start_m",
+"descent_cumul_from_start_m",
+"grade_pct",
 ]
 
 def _build_target_distances(max_distance_m: float, segment_length_m: float) -> List[float]:
@@ -92,6 +97,18 @@ def build_fixed_distance_segments(gpx_df: pd.DataFrame, segment_length_m: float 
   
       out["altitude_m"] = _interpolate_numeric(group, "altitude_m", target_distances)
       out["altitude_delta_m"] = out["altitude_m"].diff().fillna(0.0)
+  
+      step_distance_m = out["distance_from_start_m"].diff().fillna(segment_length_m)
+      out["grade_pct"] = np.where(
+          step_distance_m > 0,
+          (out["altitude_delta_m"] / step_distance_m) * 100.0,
+          0.0,
+      )
+  
+      out["ascent_delta_m"] = out["altitude_delta_m"].clip(lower=0.0)
+      out["descent_delta_m"] = (-out["altitude_delta_m"].clip(upper=0.0))
+      out["ascent_cumul_from_start_m"] = out["ascent_delta_m"].fillna(0.0).cumsum()
+      out["descent_cumul_from_start_m"] = out["descent_delta_m"].fillna(0.0).cumsum()
   
       normalized_groups.append(out)
   
