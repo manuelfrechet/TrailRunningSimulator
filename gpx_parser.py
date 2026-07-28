@@ -17,7 +17,6 @@ PREFERRED_COLUMN_ORDER = [
 "latitude_deg",
 "longitude_deg",
 "altitude_m",
-"altitude_delta_m",
 "distance_from_start_m",
 "distance_delta_m",
 ]
@@ -78,11 +77,11 @@ def parse_gpx_to_table(gpx_source: Any) -> pd.DataFrame:
                   )
                   cumulative_distance_m += distance_delta_m
 
-              previous_elevation = getattr(previous_point, "elevation", None)
-              if previous_elevation is None or current_elevation is None:
-                  altitude_delta_m = None
-              else:
-                  altitude_delta_m = current_elevation - previous_elevation
+              #previous_elevation = getattr(previous_point, "elevation", None)
+              #if previous_elevation is None or current_elevation is None:
+              #    altitude_delta_m = None
+              #else:
+              #    altitude_delta_m = current_elevation - previous_elevation
   
               row = {
                   "point_index": point_index,
@@ -93,7 +92,6 @@ def parse_gpx_to_table(gpx_source: Any) -> pd.DataFrame:
                   "latitude_deg": point.latitude,
                   "longitude_deg": point.longitude,
                   "altitude_m": point.elevation,
-                  "altitude_delta_m": altitude_delta_m,
                   "distance_from_start_m": cumulative_distance_m,
                   "distance_delta_m": distance_delta_m,
               }
