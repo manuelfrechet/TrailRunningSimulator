@@ -55,7 +55,7 @@ if uploaded_gpx is not None:
     else:
         st.dataframe(gpx_raw_df, width="stretch")
 
-    st.subheader("Normalized GPX segments (10 m)")
+    st.subheader(f"Normalized GPX segments ({SEGMENT_LENGTH_M:.0f} m)")
     if gpx_segments_df.empty:
         st.warning("No normalized GPX segments could be built.")
     else:
