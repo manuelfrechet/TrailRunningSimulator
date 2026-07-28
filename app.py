@@ -47,9 +47,14 @@ if uploaded_gpx is not None:
         segment_length_m=10.0,
     )
 
-    st.subheader("Normalized GPX segments (10 m)")
-
-    if gpx_segments_df.empty:
+    st.subheader("Raw GPX table")
+    if gpx_raw_df.empty:
         st.warning("No track points were found in this GPX file.")
+    else:
+        st.dataframe(gpx_raw_df, width="stretch")
+
+    st.subheader("Normalized GPX segments (10 m)")
+    if gpx_segments_df.empty:
+        st.warning("No normalized GPX segments could be built.")
     else:
         st.dataframe(gpx_segments_df, width="stretch")
