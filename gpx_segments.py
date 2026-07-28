@@ -83,7 +83,7 @@ def _interpolate_datetime(group: pd.DataFrame, column: str, target_distances: Li
       return pd.Series([pd.NaT] * len(target_distances), index=target_distances)
   
   x = source["distance_from_start_m"].to_numpy(dtype=float)
-  y = source[column].view("int64").to_numpy(dtype=float)
+  y = source[column].map(lambda x: x.value if pd.notna(x) else pd.NA).to_numpy(dtype=float)
   targets = np.asarray(target_distances, dtype=float)
   
   interpolated_ns = np.interp(targets, x, y)
