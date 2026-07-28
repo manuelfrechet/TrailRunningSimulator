@@ -1,22 +1,14 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, List
 
 import numpy as np
 import pandas as pd
 
 PREFERRED_COLUMN_ORDER = [
-"track_index",
-"segment_index",
-"normalized_point_index",
 "distance_from_start_m",
-"distance_delta_m",
-"timestamp",
-"latitude_deg",
-"longitude_deg",
 "altitude_m",
 "altitude_delta_m",
-"track_name",
 ]
 
 def _build_target_distances(max_distance_m: float, segment_length_m: float) -> List[float]:
@@ -24,7 +16,6 @@ def _build_target_distances(max_distance_m: float, segment_length_m: float) -> L
     raise ValueError("segment_length_m must be greater than 0")
   
   max_distance_m = max(0.0, float(max_distance_m))
-  
   targets: List[float] = []
   current = 0.0
   
@@ -50,44 +41,24 @@ def _order_columns(columns: List[str]) -> List[str]:
   return ordered
 
 def _interpolate_numeric(group: pd.DataFrame, column: str, target_distances: List[float]) -> pd.Series:
-    if column not in group.columns:
-        return pd.Series([pd.NA] * len(target_distances), dtype="float64")
-
-    source = group[["distance_from_start_m", column]].copy()
-    source["distance_from_start_m"] = pd.to_numeric(source["distance_from_start_m"], errors="coerce")
-    source[column] = pd.to_numeric(source[column], errors="coerce")
-    source = source.dropna(subset=["distance_from_start_m", column])
-    source = source.drop_duplicates(subset=["distance_from_start_m"], keep="last").sort_values("distance_from_start_m")
-
-    if source.empty:
-        return pd.Series([pd.NA] * len(target_distances), dtype="float64")
-
-    x = source["distance_from_start_m"].to_numpy(dtype=float)
-    y = source[column].to_numpy(dtype=float)
-    targets = np.asarray(target_distances, dtype=float)
-
-    interpolated = np.interp(targets, x, y)
-    return pd.Series(interpolated, dtype="float64")
-
-def _interpolate_datetime(group: pd.DataFrame, column: str, target_distances: List[float]) -> pd.Series:
-    if column not in group.columns:
-        return pd.Series([pd.NaT] * len(target_distances), dtype="datetime64[ns]")
-
-    source = group[["distance_from_start_m", column]].copy()
-    source["distance_from_start_m"] = pd.to_numeric(source["distance_from_start_m"], errors="coerce")
-    source[column] = pd.to_datetime(source[column], errors="coerce")
-    source = source.dropna(subset=["distance_from_start_m", column])
-    source = source.drop_duplicates(subset=["distance_from_start_m"], keep="last").sort_values("distance_from_start_m")
-
-    if source.empty:
-        return pd.Series([pd.NaT] * len(target_distances), dtype="datetime64[ns]")
-
-    x = source["distance_from_start_m"].to_numpy(dtype=float)
-    y = source[column].astype("int64").to_numpy(dtype=float)
-    targets = np.asarray(target_distances, dtype=float)
-
-    interpolated_ns = np.interp(targets, x, y)
-    return pd.to_datetime(interpolated_ns.astype("int64"))
+  if column not in group.columns:
+    return pd.Series([pd.NA] * len(target_distances), dtype="float64")
+  
+  source = group[["distance_from_start_m", column]].copy()
+  source["distance_from_start_m"] = pd.to_numeric(source["distance_from_start_m"], errors="coerce")
+  source[column] = pd.to_numeric(source[column], errors="coerce")
+  source = source.dropna(subset=["distance_from_start_m", column])
+  source = source.drop_duplicates(subset=["distance_from_start_m"], keep="last").sort_values("distance_from_start_m")
+  
+  if source.empty:
+      return pd.Series([pd.NA] * len(target_distances), dtype="float64")
+  
+  x = source["distance_from_start_m"].to_numpy(dtype=float)
+  y = source[column].to_numpy(dtype=float)
+  targets = np.asarray(target_distances, dtype=float)
+  
+  interpolated = np.interp(targets, x, y)
+  return pd.Series(interpolated, dtype="float64")
 
 def build_fixed_distance_segments(gpx_df: pd.DataFrame, segment_length_m: float = 10.0) -> pd.DataFrame:
   if gpx_df.empty or "distance_from_start_m" not in gpx_df.columns:
@@ -108,7 +79,7 @@ def build_fixed_distance_segments(gpx_df: pd.DataFrame, segment_length_m: float 
   else:
       grouped_iter = [(None, working)]
   
-  for group_key, group in grouped_iter:
+  for _, group in grouped_iter:
       group = group.sort_values("distance_from_start_m").drop_duplicates(subset=["distance_from_start_m"], keep="last")
   
       if group.empty:
@@ -118,25 +89,9 @@ def build_fixed_distance_segments(gpx_df: pd.DataFrame, segment_length_m: float 
       target_distances = _build_target_distances(max_distance_m, segment_length_m)
   
       out = pd.DataFrame({"distance_from_start_m": target_distances})
-      out["normalized_point_index"] = range(1, len(out) + 1)
-      out["distance_delta_m"] = out["distance_from_start_m"].diff().fillna(0.0)
   
-      out["timestamp"] = _interpolate_datetime(group, "timestamp", target_distances)
-      out["latitude_deg"] = _interpolate_numeric(group, "latitude_deg", target_distances)
-      out["longitude_deg"] = _interpolate_numeric(group, "longitude_deg", target_distances)
       out["altitude_m"] = _interpolate_numeric(group, "altitude_m", target_distances)
       out["altitude_delta_m"] = out["altitude_m"].diff().fillna(0.0)
-  
-      if group_columns:
-          if not isinstance(group_key, tuple):
-              group_key = (group_key,)
-  
-          for col, value in zip(group_columns, group_key):
-              out[col] = value
-  
-      if "track_name" in group.columns:
-          non_null_track_name = group["track_name"].dropna()
-          out["track_name"] = non_null_track_name.iloc[0] if not non_null_track_name.empty else pd.NA
   
       normalized_groups.append(out)
   
