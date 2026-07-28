@@ -50,28 +50,28 @@ def _order_columns(columns: List[str]) -> List[str]:
   return ordered
 
 def _interpolate_numeric(group: pd.DataFrame, column: str, target_distances: List[float]) -> pd.Series:
-  if column not in group.columns:
-    return pd.Series([pd.NA] * len(target_distances), index=target_distances, dtype="float64")
-  
-  source = group[["distance_from_start_m", column]].copy()
-  source["distance_from_start_m"] = pd.to_numeric(source["distance_from_start_m"], errors="coerce")
-  source[column] = pd.to_numeric(source[column], errors="coerce")
-  source = source.dropna(subset=["distance_from_start_m", column])
-  source = source.drop_duplicates(subset=["distance_from_start_m"], keep="last").sort_values("distance_from_start_m")
-  
-  if source.empty:
-      return pd.Series([pd.NA] * len(target_distances), index=target_distances, dtype="float64")
-  
-  x = source["distance_from_start_m"].to_numpy(dtype=float)
-  y = source[column].to_numpy(dtype=float)
-  targets = np.asarray(target_distances, dtype=float)
-  
-  interpolated = np.interp(targets, x, y)
-  return pd.Series(interpolated, index=target_distances, dtype="float64")
+    if column not in group.columns:
+        return pd.Series([pd.NA] * len(target_distances), dtype="float64")
+
+    source = group[["distance_from_start_m", column]].copy()
+    source["distance_from_start_m"] = pd.to_numeric(source["distance_from_start_m"], errors="coerce")
+    source[column] = pd.to_numeric(source[column], errors="coerce")
+    source = source.dropna(subset=["distance_from_start_m", column])
+    source = source.drop_duplicates(subset=["distance_from_start_m"], keep="last").sort_values("distance_from_start_m")
+
+    if source.empty:
+        return pd.Series([pd.NA] * len(target_distances), dtype="float64")
+
+    x = source["distance_from_start_m"].to_numpy(dtype=float)
+    y = source[column].to_numpy(dtype=float)
+    targets = np.asarray(target_distances, dtype=float)
+
+    interpolated = np.interp(targets, x, y)
+    return pd.Series(interpolated, dtype="float64")
 
 def _interpolate_datetime(group: pd.DataFrame, column: str, target_distances: List[float]) -> pd.Series:
     if column not in group.columns:
-        return pd.Series([pd.NaT] * len(target_distances), index=target_distances)
+        return pd.Series([pd.NaT] * len(target_distances), dtype="datetime64[ns]")
 
     source = group[["distance_from_start_m", column]].copy()
     source["distance_from_start_m"] = pd.to_numeric(source["distance_from_start_m"], errors="coerce")
@@ -80,10 +80,10 @@ def _interpolate_datetime(group: pd.DataFrame, column: str, target_distances: Li
     source = source.drop_duplicates(subset=["distance_from_start_m"], keep="last").sort_values("distance_from_start_m")
 
     if source.empty:
-        return pd.Series([pd.NaT] * len(target_distances), index=target_distances)
+        return pd.Series([pd.NaT] * len(target_distances), dtype="datetime64[ns]")
 
     x = source["distance_from_start_m"].to_numpy(dtype=float)
-    y = source[column].map(lambda x: x.value if pd.notna(x) else pd.NA).to_numpy(dtype=float)
+    y = source[column].astype("int64").to_numpy(dtype=float)
     targets = np.asarray(target_distances, dtype=float)
 
     interpolated_ns = np.interp(targets, x, y)
