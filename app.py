@@ -26,6 +26,8 @@ if uploaded_file is None:
     record_df = tables.get("record", pd.DataFrame())
     features_df = build_features(record_df)
     
+    # Display features
+    
     st.subheader("Preview: your run metrics at .fit file granularity")
     if features_df.empty:
         st.warning("No features could be computed.")
@@ -33,11 +35,10 @@ if uploaded_file is None:
         st.dataframe(features_df, width="stretch")
     
     st.divider()
-    
-    # Import GPX
-    
-    st.subheader("Upload your next race .GPX")
-    uploaded_gpx = st.file_uploader("Choose a GPX file", type=["gpx"], key="gpx_uploader")
+
+# Upload GPX for next race
+st.subheader("Upload your next race .GPX")
+uploaded_gpx = st.file_uploader("Choose a GPX file", type=["gpx"], key="gpx_uploader")
 
 if uploaded_gpx is not None:
     st.success(f"GPX file received: {uploaded_gpx.name}")
@@ -65,14 +66,14 @@ if uploaded_gpx is not None:
         race_length_km = float(gpx_segments_df["distance_from_start_m"].max()) / 1000.0
         expected_aid_stations = ceil(race_length_km / 10.0)
     
+        st.subheader("Aid stations")
+        st.write(
+            f"Race length: {race_length_km:.2f} km — suggested aid station slots: {expected_aid_stations}"
+        )
+    
+        aid_station_rows = []
+    
         with st.form(key="aid_station_form"):
-            st.subheader("Aid stations")
-            st.write(
-                f"Race length: {race_length_km:.2f} km — suggested aid station slots: {expected_aid_stations}"
-            )
-    
-            aid_station_rows = []
-    
             for i in range(expected_aid_stations):
                 col1, col2 = st.columns(2)
     
