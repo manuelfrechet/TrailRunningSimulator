@@ -11,12 +11,12 @@ SEGMENT_LENGTH_M = 50.0
 
 st.title("Trail Running Simulator")
 
-# Upload for .FIT file
-st.write("Upload a FIT file to extract your performance model from this run")
+# Upload FIT file
+st.write("Upload a .FIT file to extract your performance model from previous run")
 uploaded_file = st.file_uploader("Choose a .FIT file", type=["fit"], key="fit_uploader")
 
 if uploaded_file is None:
-    st.info("Upload a FIT file to begin.")
+    st.info("Upload a .FIT file to begin.")
     st.stop()
     
     st.success(f"File received: {uploaded_file.name}")
@@ -27,14 +27,13 @@ if uploaded_file is None:
     features_df = build_features(record_df)
     
     # Display features
-    
-    st.subheader("Preview: your run metrics at .fit file granularity")
+    st.subheader("Preview your run metrics extracted from uploaded .fit file")
     if features_df.empty:
-        st.warning("No features could be computed.")
+        st.warning("No meatrics could be computed.")
     else:
         st.dataframe(features_df, width="stretch")
     
-    st.subheader("Raw FIT table")
+    with st.expander("Raw FIT table", expanded=False):
     if record_df.empty:
         st.warning("No record messages were found in this FIT file.")
     else:
