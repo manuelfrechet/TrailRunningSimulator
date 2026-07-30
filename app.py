@@ -85,13 +85,13 @@ if uploaded_gpx is not None:
     
                 with col1:
                     station_name = st.text_input(
-                        f"Aid-station{i + 1} name",
+                        f"Aid-station {i + 1} - name",
                         key=f"aid_name_{i}",
                     )
     
                 with col2:
                     station_km = st.number_input(
-                        f"Aid-station {i + 1} km",
+                        f"Aid-station {i + 1} - km",
                         min_value=0.0,
                         max_value=race_length_km,
                         value=0.0,
