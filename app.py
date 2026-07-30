@@ -13,7 +13,7 @@ st.title("Trail Running Simulator")
 
 #Upload for .FIT file
 st.write("Upload a FIT file to extract your performance model from this run")
-uploaded_file = st.file_uploader("Choose a .FIT file", type=["fit"])
+uploaded_file = st.file_uploader("Choose a .FIT file", type=["fit"], key="fit_uploader")
 
 if uploaded_file is None:
     st.info("Upload a FIT file to begin.")
