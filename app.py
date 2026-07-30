@@ -50,13 +50,13 @@ if uploaded_gpx is not None:
         segment_length_m=SEGMENT_LENGTH_M,
     )
     
-    with st.expander("Raw GPX table", expanded=False):
+    with st.expander("Raw data from uploaded next race .gpx file", expanded=False):
         if gpx_raw_df.empty:
             st.warning("No track points were found in this GPX file.")
         else:
             st.dataframe(gpx_raw_df, width="stretch")
     
-    with st.expander(f"Race profile with normalized {SEGMENT_LENGTH_M:.0f}m segments", expanded=False):
+    with st.expander(f"Normalized race profile with {SEGMENT_LENGTH_M:.0f}m segments", expanded=False):
         if gpx_segments_df.empty:
             st.warning("No normalized GPX segments could be built.")
         else:
