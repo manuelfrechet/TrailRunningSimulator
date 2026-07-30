@@ -28,9 +28,9 @@ if uploaded_file is None:
     
     st.subheader("Preview: your run metrics at .fit file granularity")
     if features_df.empty:
-    st.warning("No features could be computed.")
+        st.warning("No features could be computed.")
     else:
-    st.dataframe(features_df, width="stretch")
+        st.dataframe(features_df, width="stretch")
     
     st.divider()
     
