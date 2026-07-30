@@ -27,10 +27,10 @@ features_df = build_features(record_df)
 
 # Display features
 st.subheader("Preview your run metrics extracted from uploaded .fit file")
-if features_df.empty:
-    st.warning("No metrics could be computed.")
-else:
-    st.dataframe(features_df, width="stretch")
+#if features_df.empty:
+#    st.warning("No metrics could be computed.")
+#else:
+#    st.dataframe(features_df, width="stretch")
 
 with st.expander("Raw FIT table", expanded=False):
     if record_df.empty:
