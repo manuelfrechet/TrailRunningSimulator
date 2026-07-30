@@ -4,7 +4,7 @@ from math import ceil
 
 from features import build_features
 from gpx_parser import parse_gpx_to_table
-from gpx_segments import build_fixed_distance_segments
+from gpx_segments import build_fixed_distance_segments, enhance_race_profile_with_breakpoints
 from parser import parse_fit_to_tables
 
 SEGMENT_LENGTH_M = 50.0
@@ -27,11 +27,16 @@ features_df = build_features(record_df)
 
 # Display features
 st.subheader("Preview your run metrics extracted from uploaded .fit file")
-with st.expander("Run metrics from your uploaded .fit file", expanded=False):
+if features_df.empty:
+    st.warning("No metrics could be computed.")
+else:
+    st.dataframe(features_df, width="stretch")
+
+with st.expander("Raw FIT table", expanded=False):
     if record_df.empty:
         st.warning("No record messages were found in this FIT file.")
     else:
-        st.dataframe(record_df, width="stretch")
+    st.dataframe(record_df, width="stretch")
 
 st.divider()
 
@@ -41,29 +46,19 @@ uploaded_gpx = st.file_uploader("Choose a GPX file", type=["gpx"], key="gpx_uplo
 
 if uploaded_gpx is not None:
     st.success(f"GPX file received: {uploaded_gpx.name}")
-    
     uploaded_gpx.seek(0)
     gpx_raw_df = parse_gpx_to_table(uploaded_gpx)
     
-    gpx_segments_df = build_fixed_distance_segments(
-        gpx_raw_df,
-        segment_length_m=SEGMENT_LENGTH_M,
-    )
-    
-    with st.expander("Raw data from uploaded next race .gpx file", expanded=False):
+    with st.expander("Raw GPX table", expanded=False):
         if gpx_raw_df.empty:
             st.warning("No track points were found in this GPX file.")
         else:
             st.dataframe(gpx_raw_df, width="stretch")
     
-    with st.expander(f"Normalized race profile with {SEGMENT_LENGTH_M:.0f}m segments", expanded=False):
-        if gpx_segments_df.empty:
-            st.warning("No normalized GPX segments could be built.")
-        else:
-            st.dataframe(gpx_segments_df, width="stretch")
-    
-    if not gpx_segments_df.empty:
-        race_length_km = float(gpx_segments_df["distance_from_start_m"].max()) / 1000.0
+    if gpx_raw_df.empty:
+        st.warning("No GPX profile can be built because the raw GPX table is empty.")
+    else:
+        race_length_km = float(gpx_raw_df["distance_from_start_m"].max()) / 1000.0
         expected_aid_stations = ceil(race_length_km / 10.0)
     
         st.subheader("Aid stations")
@@ -71,9 +66,9 @@ if uploaded_gpx is not None:
             f"Race length: {race_length_km:.2f} km — suggested aid station slots: {expected_aid_stations}"
         )
     
-        aid_station_rows = []
-    
         with st.form(key="aid_station_form"):
+            aid_station_rows = []
+    
             for i in range(expected_aid_stations):
                 col1, col2 = st.columns(2)
     
@@ -101,7 +96,7 @@ if uploaded_gpx is not None:
                         }
                     )
     
-            submitted = st.form_submit_button("Save aid stations")
+            submitted = st.form_submit_button("Build race profile")
     
         if submitted:
             aid_stations_df = pd.DataFrame(aid_station_rows)
@@ -111,3 +106,19 @@ if uploaded_gpx is not None:
                 st.warning("No aid stations entered yet.")
             else:
                 st.dataframe(aid_stations_df, width="stretch")
+    
+            gpx_segments_df = build_fixed_distance_segments(
+                gpx_raw_df,
+                segment_length_m=SEGMENT_LENGTH_M,
+            )
+    
+            enhanced_race_profile_df = enhance_race_profile_with_breakpoints(
+                gpx_segments_df,
+                aid_stations_df,
+            )
+    
+            with st.expander(f"Race profile with normalized {SEGMENT_LENGTH_M:.0f}m segments", expanded=False):
+                if enhanced_race_profile_df.empty:
+                    st.warning("No enhanced race profile could be built.")
+                else:
+                    st.dataframe(enhanced_race_profile_df, width="stretch")
