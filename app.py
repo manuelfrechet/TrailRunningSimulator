@@ -34,6 +34,12 @@ if uploaded_file is None:
     else:
         st.dataframe(features_df, width="stretch")
     
+    st.subheader("Raw FIT table")
+    if record_df.empty:
+        st.warning("No record messages were found in this FIT file.")
+    else:
+        st.dataframe(record_df, width="stretch")
+    
     st.divider()
 
 # Upload GPX for next race
@@ -79,13 +85,13 @@ if uploaded_gpx is not None:
     
                 with col1:
                     station_name = st.text_input(
-                        f"Aid-station name {i + 1}",
+                        f"Aid-station{i + 1} name",
                         key=f"aid_name_{i}",
                     )
     
                 with col2:
                     station_km = st.number_input(
-                        f"Aid-station km {i + 1}",
+                        f"Aid-station {i + 1} km",
                         min_value=0.0,
                         max_value=race_length_km,
                         value=0.0,
