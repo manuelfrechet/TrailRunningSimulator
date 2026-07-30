@@ -159,66 +159,67 @@ def _interpolate_profile_row(reference_df: pd.DataFrame, distance_from_start_m: 
   return row
 
 def enhance_race_profile_with_breakpoints(
-  race_profile_df: pd.DataFrame,
-  aid_stations_df: pd.DataFrame,
-  distance_tolerance_m: float = 1e-6,
-  ) -> pd.DataFrame:
-  if race_profile_df.empty:
-    enhanced = race_profile_df.copy()
-  if "Key_break_points" not in enhanced.columns:
-    enhanced["Key_break_points"] = ""
-  if "Estimated_running_time" not in enhanced.columns:
-    enhanced["Estimated_running_time"] = pd.NA
-  return enhanced
-  
-  base = race_profile_df.copy().sort_values("distance_from_start_m").reset_index(drop=True)
-  
-  if "Key_break_points" not in base.columns:
-      base["Key_break_points"] = ""
-  if "Estimated_running_time" not in base.columns:
-      base["Estimated_running_time"] = pd.NA
-  
-  reference = base.copy().sort_values("distance_from_start_m").reset_index(drop=True)
-  
-  rows_to_add: List[Dict[str, Any]] = []
-  
-  if aid_stations_df is not None and not aid_stations_df.empty:
-      aid = aid_stations_df.copy()
-      aid["aid_station_name"] = aid["aid_station_name"].astype(str).str.strip()
-      aid["aid_station_km"] = pd.to_numeric(aid["aid_station_km"], errors="coerce")
-      aid = aid.dropna(subset=["aid_station_name", "aid_station_km"])
-      aid = aid[aid["aid_station_name"] != ""]
-      aid["distance_from_start_m"] = aid["aid_station_km"] * 1000.0
-      aid = aid.sort_values("distance_from_start_m")
-  
-      for _, station in aid.iterrows():
-          aid_name = str(station["aid_station_name"]).strip()
-          aid_distance_m = float(station["distance_from_start_m"])
-  
-          mask = np.isclose(
-              base["distance_from_start_m"].to_numpy(dtype=float),
-              aid_distance_m,
-              atol=distance_tolerance_m,
-          )
-  
-          if mask.any():
-              idx = base.index[mask][0]
-              existing = base.at[idx, "Key_break_points"]
-  
-              if pd.isna(existing) or str(existing).strip() == "":
-                  base.at[idx, "Key_break_points"] = aid_name
-              else:
-                  base.at[idx, "Key_break_points"] = f"{existing} / {aid_name}"
-          else:
-              new_row = _interpolate_profile_row(reference, aid_distance_m)
-              new_row["Key_break_points"] = aid_name
-              rows_to_add.append(new_row)
-  
-  if rows_to_add:
-      base = pd.concat([base, pd.DataFrame(rows_to_add)], ignore_index=True)
-      base = base.sort_values("distance_from_start_m").reset_index(drop=True)
-  
-  if not base.empty:
-      base = base[_order_columns(list(base.columns))]
-  
-  return base
+    race_profile_df: pd.DataFrame,
+    aid_stations_df: pd.DataFrame,
+    distance_tolerance_m: float = 1e-6,
+    ) -> pd.DataFrame:
+    if race_profile_df.empty:
+        enhanced = race_profile_df.copy()
+        if "Key_break_points" not in enhanced.columns:
+            enhanced["Key_break_points"] = ""
+        if "Estimated_running_time" not in enhanced.columns:
+            enhanced["Estimated_running_time"] = pd.NA
+        return enhanced
+
+    base = race_profile_df.copy().sort_values("distance_from_start_m").reset_index(drop=True)
+
+    if "Key_break_points" not in base.columns:
+        base["Key_break_points"] = ""
+    if "Estimated_running_time" not in base.columns:
+        base["Estimated_running_time"] = pd.NA
+
+    reference = base.copy().sort_values("distance_from_start_m").reset_index(drop=True)
+
+    rows_to_add: List[Dict[str, Any]] = []
+
+    if aid_stations_df is not None and not aid_stations_df.empty:
+        aid = aid_stations_df.copy()
+        aid["aid_station_name"] = aid["aid_station_name"].astype(str).str.strip()
+        aid["aid_station_km"] = pd.to_numeric(aid["aid_station_km"], errors="coerce")
+        aid = aid.dropna(subset=["aid_station_name", "aid_station_km"])
+        aid = aid[aid["aid_station_name"] != ""]
+        aid["distance_from_start_m"] = aid["aid_station_km"] * 1000.0
+        aid = aid.sort_values("distance_from_start_m")
+
+        for _, station in aid.iterrows():
+            aid_name = str(station["aid_station_name"]).strip()
+            aid_distance_m = float(station["distance_from_start_m"])
+
+            mask = np.isclose(
+                base["distance_from_start_m"].to_numpy(dtype=float),
+                aid_distance_m,
+                atol=distance_tolerance_m,
+            )
+
+            if mask.any():
+                idx = base.index[mask][0]
+                existing = base.at[idx, "Key_break_points"]
+
+                if pd.isna(existing) or str(existing).strip() == "":
+                    base.at[idx, "Key_break_points"] = aid_name
+                else:
+                    base.at[idx, "Key_break_points"] = f"{existing} / {aid_name}"
+            else:
+                new_row = _interpolate_profile_row(reference, aid_distance_m)
+                new_row["Key_break_points"] = aid_name
+                rows_to_add.append(new_row)
+
+    result = base
+    if rows_to_add:
+        result = pd.concat([base, pd.DataFrame(rows_to_add)], ignore_index=True)
+        result = result.sort_values("distance_from_start_m").reset_index(drop=True)
+
+    if not result.empty:
+        result = result[_order_columns(list(result.columns))]
+
+    return result
