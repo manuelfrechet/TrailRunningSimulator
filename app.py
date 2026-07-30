@@ -26,7 +26,7 @@ record_df = tables.get("record", pd.DataFrame())
 features_df = build_features(record_df)
 
 # Display features
-st.subheader("Preview your run metrics extracted from uploaded .fit file")
+#st.subheader("Preview your run metrics extracted from uploaded .fit file")
 #if features_df.empty:
 #    st.warning("No metrics could be computed.")
 #else:
