@@ -119,3 +119,47 @@ if uploaded_gpx is not None:
         st.warning("No normalized GPX segments could be built.")
     else:
         st.dataframe(gpx_segments_df, width="stretch")
+
+        race_length_km = float(gpx_segments_df["distance_from_start_m"].max()) / 1000.0
+        expected_aid_stations = ceil(race_length_km / 10.0)
+
+        st.subheader("Aid stations")
+        st.write(
+            f"Race length: {race_length_km:.2f} km — suggested aid station slots: {expected_aid_stations}"
+        )
+
+        aid_station_rows = []
+        for i in range(expected_aid_stations):
+            col1, col2 = st.columns(2)
+
+            with col1:
+                station_name = st.text_input(
+                    f"Aid-station name {i + 1}",
+                    key=f"aid_name_{i}",
+                )
+
+            with col2:
+                station_km = st.number_input(
+                    f"Aid-station km {i + 1}",
+                    min_value=0.0,
+                    max_value=race_length_km,
+                    value=0.0,
+                    step=0.1,
+                    key=f"aid_km_{i}",
+                )
+
+            if station_name.strip():
+                aid_station_rows.append(
+                    {
+                        "aid_station_name": station_name.strip(),
+                        "aid_station_km": station_km,
+                    }
+                )
+
+        aid_stations_df = pd.DataFrame(aid_station_rows)
+
+        st.subheader("Aid stations entered")
+        if aid_stations_df.empty:
+            st.warning("No aid stations entered yet.")
+        else:
+            st.dataframe(aid_stations_df, width="stretch")
