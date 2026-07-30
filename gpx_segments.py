@@ -164,11 +164,11 @@ def enhance_race_profile_with_breakpoints(
   distance_tolerance_m: float = 1e-6,
   ) -> pd.DataFrame:
   if race_profile_df.empty:
-  enhanced = race_profile_df.copy()
+    enhanced = race_profile_df.copy()
   if "Key_break_points" not in enhanced.columns:
-  enhanced["Key_break_points"] = ""
+    enhanced["Key_break_points"] = ""
   if "Estimated_running_time" not in enhanced.columns:
-  enhanced["Estimated_running_time"] = pd.NA
+    enhanced["Estimated_running_time"] = pd.NA
   return enhanced
   
   base = race_profile_df.copy().sort_values("distance_from_start_m").reset_index(drop=True)
