@@ -58,51 +58,51 @@ if uploaded_gpx is not None:
         aid_station_rows = []
         
         with st.expander("Aid stations", expanded=True):
-    st.write(
-        f"Race length: {race_length_km:.2f} km — suggested aid station slots: {expected_aid_stations}"
-    )
+            st.write(
+                f"Race length: {race_length_km:.2f} km — suggested aid station slots: {expected_aid_stations}"
+            )
 
-    default_aid_station_rows = pd.DataFrame(
-        {
-            "aid_station_name": [""] * expected_aid_stations,
-            "aid_station_km": [0.0] * expected_aid_stations,
-        }
-    )
-
-    with st.form(key="aid_station_form"):
-        aid_station_input_df = st.data_editor(
-            default_aid_station_rows,
-            num_rows="fixed",
-            hide_index=True,
-            use_container_width=True,
-            column_config={
-                "aid_station_name": st.column_config.TextColumn("aid station name"),
-                "aid_station_km": st.column_config.NumberColumn(
-                    "aid station km",
-                    min_value=0.0,
-                    max_value=race_length_km,
-                    step=0.1,
-                ),
-            },
-        )
-
-        submitted = st.form_submit_button("Build race profile")
-
-    if submitted:
-        aid_stations_df = aid_station_input_df.copy()
-        aid_stations_df["aid_station_name"] = (
-            aid_stations_df["aid_station_name"].astype(str).str.strip()
-        )
-        aid_stations_df["aid_station_km"] = pd.to_numeric(
-            aid_stations_df["aid_station_km"], errors="coerce"
-        )
-        aid_stations_df = aid_stations_df.dropna(
-            subset=["aid_station_name", "aid_station_km"]
-        )
-        aid_stations_df = aid_stations_df[aid_stations_df["aid_station_name"] != ""]
-
-        st.subheader("Aid stations entered")
-        if aid_stations_df.empty:
-            st.warning("No aid stations entered yet.")
-        else:
-            st.dataframe(aid_stations_df, width="stretch")
+            default_aid_station_rows = pd.DataFrame(
+                {
+                    "aid_station_name": [""] * expected_aid_stations,
+                    "aid_station_km": [0.0] * expected_aid_stations,
+                }
+            )
+        
+            with st.form(key="aid_station_form"):
+                aid_station_input_df = st.data_editor(
+                    default_aid_station_rows,
+                    num_rows="fixed",
+                    hide_index=True,
+                    use_container_width=True,
+                    column_config={
+                        "aid_station_name": st.column_config.TextColumn("aid station name"),
+                        "aid_station_km": st.column_config.NumberColumn(
+                            "aid station km",
+                            min_value=0.0,
+                            max_value=race_length_km,
+                            step=0.1,
+                        ),
+                    },
+                )
+        
+                submitted = st.form_submit_button("Build race profile")
+        
+            if submitted:
+                aid_stations_df = aid_station_input_df.copy()
+                aid_stations_df["aid_station_name"] = (
+                    aid_stations_df["aid_station_name"].astype(str).str.strip()
+                )
+                aid_stations_df["aid_station_km"] = pd.to_numeric(
+                    aid_stations_df["aid_station_km"], errors="coerce"
+                )
+                aid_stations_df = aid_stations_df.dropna(
+                    subset=["aid_station_name", "aid_station_km"]
+                )
+                aid_stations_df = aid_stations_df[aid_stations_df["aid_station_name"] != ""]
+        
+                st.subheader("Aid stations entered")
+                if aid_stations_df.empty:
+                    st.warning("No aid stations entered yet.")
+                else:
+                    st.dataframe(aid_stations_df, width="stretch")
