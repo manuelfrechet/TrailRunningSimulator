@@ -5,6 +5,7 @@ from features import build_features
 from parser import parse_fit_to_tables
 from gpx_parser import parse_gpx_to_table
 from gpx_segments import build_fixed_distance_segments
+from math import ceil
 
 SEGMENT_LENGTH_M = 50.0
 
