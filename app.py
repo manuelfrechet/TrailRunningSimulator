@@ -19,27 +19,27 @@ if uploaded_file is None:
     st.info("Upload a .FIT file to begin.")
     st.stop()
     
-    st.success(f"File received: {uploaded_file.name}")
+st.success(f"File received: {uploaded_file.name}")
     
-    uploaded_file.seek(0)
-    tables = parse_fit_to_tables(uploaded_file)
-    record_df = tables.get("record", pd.DataFrame())
-    features_df = build_features(record_df)
+uploaded_file.seek(0)
+tables = parse_fit_to_tables(uploaded_file)
+record_df = tables.get("record", pd.DataFrame())
+features_df = build_features(record_df)
     
-    # Display features
-    st.subheader("Preview your run metrics extracted from uploaded .fit file")
-    if features_df.empty:
-        st.warning("No meatrics could be computed.")
+# Display features
+st.subheader("Preview your run metrics extracted from uploaded .fit file")
+if features_df.empty:
+    st.warning("No meatrics could be computed.")
+else:
+    st.dataframe(features_df, width="stretch")
+    
+with st.expander("Raw FIT table", expanded=False):
+    if record_df.empty:
+        st.warning("No record messages were found in this FIT file.")
     else:
-        st.dataframe(features_df, width="stretch")
+        st.dataframe(record_df, width="stretch")
     
-    with st.expander("Raw FIT table", expanded=False):
-        if record_df.empty:
-            st.warning("No record messages were found in this FIT file.")
-        else:
-            st.dataframe(record_df, width="stretch")
-    
-    st.divider()
+st.divider()
 
 # Upload GPX for next race
 st.subheader("Upload your next race .GPX")
