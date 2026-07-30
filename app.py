@@ -106,3 +106,22 @@ if uploaded_gpx is not None:
                     st.warning("No aid stations entered yet.")
                 else:
                     st.dataframe(aid_stations_df, width="stretch")
+
+                gpx_segments_df = build_fixed_distance_segments(
+                    gpx_raw_df,
+                    segment_length_m=SEGMENT_LENGTH_M,
+                )
+
+                enhanced_race_profile_df = enhance_race_profile_with_breakpoints(
+                    gpx_segments_df,
+                    aid_stations_df,
+                )
+    
+                with st.expander(
+                    f"Race profile with normalized {SEGMENT_LENGTH_M:.0f}m segments",
+                    expanded=False,
+                ):
+                    if enhanced_race_profile_df.empty:
+                        st.warning("No enhanced race profile could be built.")
+                    else:
+                        st.dataframe(enhanced_race_profile_df, width="stretch")
