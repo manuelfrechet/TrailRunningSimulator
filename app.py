@@ -47,16 +47,16 @@ if uploaded_gpx is not None:
             st.warning("No track points were found in this GPX file.")
         else:
             st.dataframe(gpx_raw_df, width="stretch")
-    
-    if gpx_raw_df.empty:
+        if gpx_raw_df.empty:
         st.warning("No GPX profile can be built because the raw GPX table is empty.")
     else:
         race_length_km = float(gpx_raw_df["distance_from_start_m"].max()) / 1000.0
         expected_aid_stations = ceil(race_length_km / 10.0)
 
-        #submitted = false
+        submitted = False
+        enhanced_race_profile_df = None
         aid_station_rows = []
-        
+
         with st.expander("Aid stations", expanded=True):
             st.write(
                 f"Race length: {race_length_km:.2f} km — suggested aid station slots: {expected_aid_stations}"
@@ -68,7 +68,7 @@ if uploaded_gpx is not None:
                     "aid_station_km": [0.0] * expected_aid_stations,
                 }
             )
-        
+
             with st.form(key="aid_station_form"):
                 aid_station_input_df = st.data_editor(
                     default_aid_station_rows,
@@ -85,9 +85,9 @@ if uploaded_gpx is not None:
                         ),
                     },
                 )
-        
+
                 submitted = st.form_submit_button("Build race profile")
-        
+
             if submitted:
                 aid_stations_df = aid_station_input_df.copy()
                 aid_stations_df["aid_station_name"] = (
@@ -100,7 +100,7 @@ if uploaded_gpx is not None:
                     subset=["aid_station_name", "aid_station_km"]
                 )
                 aid_stations_df = aid_stations_df[aid_stations_df["aid_station_name"] != ""]
-        
+
                 st.subheader("Aid stations entered")
                 if aid_stations_df.empty:
                     st.warning("No aid stations entered yet.")
@@ -116,7 +116,8 @@ if uploaded_gpx is not None:
                     gpx_segments_df,
                     aid_stations_df,
                 )
-    
+
+        if submitted and enhanced_race_profile_df is not None:
             with st.expander(
                 f"Race profile with normalized {SEGMENT_LENGTH_M:.0f}m segments",
                 expanded=False,
