@@ -37,6 +37,10 @@ st.divider()
 st.subheader("Upload your next race .GPX")
 uploaded_gpx = st.file_uploader("Choose a GPX file", type=["gpx"], key="gpx_uploader")
 
+gpx_raw_df = None
+aid_stations_df = None
+enhanced_race_profile_df = None
+
 if uploaded_gpx is not None:
     st.success(f"GPX file received: {uploaded_gpx.name}")
     uploaded_gpx.seek(0)
@@ -47,34 +51,31 @@ if uploaded_gpx is not None:
             st.warning("No track points were found in this GPX file.")
         else:
             st.dataframe(gpx_raw_df, width="stretch")
-        if gpx_raw_df.empty:
-            st.warning("No GPX profile can be built because the raw GPX table is empty.")
-        else:
-            race_length_km = float(gpx_raw_df["distance_from_start_m"].max()) / 1000.0
-            expected_aid_stations = ceil(race_length_km / 10.0)
-
-        submitted = False
-        enhanced_race_profile_df = None
-        aid_station_rows = []
-
+    
+    if gpx_raw_df.empty:
+        st.warning("No GPX profile can be built because the raw GPX table is empty.")
+    else:
+        race_length_km = float(gpx_raw_df["distance_from_start_m"].max()) / 1000.0
+        expected_aid_stations = ceil(race_length_km / 10.0)
+    
         with st.expander("Aid stations", expanded=True):
             st.write(
                 f"Race length: {race_length_km:.2f} km — suggested aid station slots: {expected_aid_stations}"
             )
-
+    
             default_aid_station_rows = pd.DataFrame(
                 {
                     "aid_station_name": [""] * expected_aid_stations,
                     "aid_station_km": [0.0] * expected_aid_stations,
                 }
             )
-
+    
             with st.form(key="aid_station_form"):
                 aid_station_input_df = st.data_editor(
                     default_aid_station_rows,
                     num_rows="fixed",
                     hide_index=True,
-                    use_container_width=True,
+                    width="stretch",
                     column_config={
                         "aid_station_name": st.column_config.TextColumn("aid station name"),
                         "aid_station_km": st.column_config.NumberColumn(
@@ -85,9 +86,9 @@ if uploaded_gpx is not None:
                         ),
                     },
                 )
-
+    
                 submitted = st.form_submit_button("Build race profile")
-
+    
             if submitted:
                 aid_stations_df = aid_station_input_df.copy()
                 aid_stations_df["aid_station_name"] = (
@@ -100,29 +101,27 @@ if uploaded_gpx is not None:
                     subset=["aid_station_name", "aid_station_km"]
                 )
                 aid_stations_df = aid_stations_df[aid_stations_df["aid_station_name"] != ""]
-
+    
                 st.subheader("Aid stations entered")
                 if aid_stations_df.empty:
                     st.warning("No aid stations entered yet.")
                 else:
                     st.dataframe(aid_stations_df, width="stretch")
-
+    
                 gpx_segments_df = build_fixed_distance_segments(
                     gpx_raw_df,
                     segment_length_m=SEGMENT_LENGTH_M,
                 )
-
+    
                 enhanced_race_profile_df = enhance_race_profile_with_breakpoints(
                     gpx_segments_df,
                     aid_stations_df,
                 )
-
-        if submitted and enhanced_race_profile_df is not None:
-            with st.expander(
-                f"Race profile with normalized {SEGMENT_LENGTH_M:.0f}m segments",
-                expanded=False,
-            ):
-                if enhanced_race_profile_df.empty:
-                    st.warning("No enhanced race profile could be built.")
-                else:
-                    st.dataframe(enhanced_race_profile_df, width="stretch")
+    
+        with st.expander(f"Race profile with normalized {SEGMENT_LENGTH_M:.0f}m segments", expanded=False):
+            if enhanced_race_profile_df is None:
+                st.info("Enter aid stations and click 'Build race profile' to generate the race profile.")
+            elif enhanced_race_profile_df.empty:
+                st.warning("No enhanced race profile could be built.")
+            else:
+                st.dataframe(enhanced_race_profile_df, width="stretch")
