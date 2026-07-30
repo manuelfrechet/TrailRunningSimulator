@@ -25,13 +25,6 @@ tables = parse_fit_to_tables(uploaded_file)
 record_df = tables.get("record", pd.DataFrame())
 features_df = build_features(record_df)
 
-# Display features
-#st.subheader("Preview your run metrics extracted from uploaded .fit file")
-#if features_df.empty:
-#    st.warning("No metrics could be computed.")
-#else:
-#    st.dataframe(features_df, width="stretch")
-
 with st.expander("Raw FIT table", expanded=False):
     if record_df.empty:
         st.warning("No record messages were found in this FIT file.")
@@ -72,28 +65,13 @@ if uploaded_gpx is not None:
                     col1, col2 = st.columns(2)
             
                     with col1:
-                        station_name = st.text_input(
-                            f"Aid-station {i + 1} - name",
-                            key=f"aid_name_{i}",
-                        )
+                        station_name = st.text_input(f"Aid-station {i + 1} - name",key=f"aid_name_{i}",)
             
                     with col2:
-                        station_km = st.number_input(
-                            f"Aid-station {i + 1} - km",
-                            min_value=0.0,
-                            max_value=race_length_km,
-                            value=0.0,
-                            step=0.1,
-                            key=f"aid_km_{i}",
-                        )
+                        station_km = st.number_input(f"Aid-station {i + 1} - km",min_value=0.0,max_value=race_length_km,value=0.0,step=0.1,key=f"aid_km_{i}",)
             
                     if station_name.strip():
-                        aid_station_rows.append(
-                            {
-                                "aid_station_name": station_name.strip(),
-                                "aid_station_km": station_km,
-                            }
-                        )
+                        aid_station_rows.append({"aid_station_name": station_name.strip(),"aid_station_km": station_km,})
             
                 submitted = st.form_submit_button("Build race profile")
             
@@ -107,15 +85,9 @@ if uploaded_gpx is not None:
                     st.dataframe(aid_stations_df, width="stretch")
 
         if submitted:
-            gpx_segments_df = build_fixed_distance_segments(
-                gpx_raw_df,
-                segment_length_m=SEGMENT_LENGTH_M,
-            )
+            gpx_segments_df = build_fixed_distance_segments(gpx_raw_df,segment_length_m=SEGMENT_LENGTH_M,)
             
-            enhanced_race_profile_df = enhance_race_profile_with_breakpoints(
-                gpx_segments_df,
-                aid_stations_df,
-            )
+            enhanced_race_profile_df = enhance_race_profile_with_breakpoints(gpx_segments_df,aid_stations_df,)
             
             with st.expander(f"Race profile with normalized {SEGMENT_LENGTH_M:.0f}m segments",expanded=False,):
                 if enhanced_race_profile_df.empty:
