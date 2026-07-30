@@ -117,11 +117,11 @@ if uploaded_gpx is not None:
                     aid_stations_df,
                 )
             
-                with st.expander(
-                    f"Race profile with normalized {SEGMENT_LENGTH_M:.0f}m segments",
-                    expanded=False,
-                ):
-                    if enhanced_race_profile_df.empty:
-                        st.warning("No enhanced race profile could be built.")
-                    else:
-                        st.dataframe(enhanced_race_profile_df, width="stretch")
+            with st.expander(
+                f"Race profile with normalized {SEGMENT_LENGTH_M:.0f}m segments",
+                 expanded=False,
+            ):
+                if enhanced_race_profile_df.empty:
+                    st.warning("No enhanced race profile could be built.")
+                else:
+                    st.dataframe(enhanced_race_profile_df, width="stretch")
