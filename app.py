@@ -34,10 +34,10 @@ if uploaded_file is None:
         st.dataframe(features_df, width="stretch")
     
     with st.expander("Raw FIT table", expanded=False):
-    if record_df.empty:
-        st.warning("No record messages were found in this FIT file.")
-    else:
-        st.dataframe(record_df, width="stretch")
+        if record_df.empty:
+            st.warning("No record messages were found in this FIT file.")
+        else:
+            st.dataframe(record_df, width="stretch")
     
     st.divider()
 
