@@ -61,7 +61,7 @@ if uploaded_gpx is not None:
         race_length_km = float(gpx_raw_df["distance_from_start_m"].max()) / 1000.0
         expected_aid_stations = ceil(race_length_km / 10.0)
 
-        submitted = false
+        #submitted = false
         aid_station_rows = []
         
         with st.expander("Aid stations", expanded=True):
