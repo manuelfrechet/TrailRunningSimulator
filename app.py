@@ -66,7 +66,7 @@ if uploaded_gpx is not None:
             default_aid_station_rows = pd.DataFrame(
                 {
                     "aid_station_name": [""] * expected_aid_stations,
-                    "aid_station_km": [0.0] * expected_aid_stations,
+                    "aid_station_km": [0.00] * expected_aid_stations,
                 }
             )
     
@@ -82,7 +82,7 @@ if uploaded_gpx is not None:
                             "aid station km",
                             min_value=0.0,
                             max_value=race_length_km,
-                            step=0.1,
+                            step=0.01,
                         ),
                     },
                 )
@@ -108,15 +108,9 @@ if uploaded_gpx is not None:
                 else:
                     st.dataframe(aid_stations_df, width="stretch")
     
-                gpx_segments_df = build_fixed_distance_segments(
-                    gpx_raw_df,
-                    segment_length_m=SEGMENT_LENGTH_M,
-                )
+                gpx_segments_df = build_fixed_distance_segments(gpx_raw_df,segment_length_m=SEGMENT_LENGTH_M,)
     
-                enhanced_race_profile_df = enhance_race_profile_with_breakpoints(
-                    gpx_segments_df,
-                    aid_stations_df,
-                )
+                enhanced_race_profile_df = enhance_race_profile_with_breakpoints(gpx_segments_df,aid_stations_df,)
     
         if enhanced_race_profile_df is not None:
             with st.expander(f"Race profile with normalized {SEGMENT_LENGTH_M:.0f}m segments",expanded=False,):
