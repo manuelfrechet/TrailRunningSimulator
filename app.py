@@ -36,7 +36,7 @@ with st.expander("Raw FIT table", expanded=False):
     if record_df.empty:
         st.warning("No record messages were found in this FIT file.")
     else:
-    st.dataframe(record_df, width="stretch")
+        st.dataframe(record_df, width="stretch")
 
 st.divider()
 
