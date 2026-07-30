@@ -48,10 +48,10 @@ if uploaded_gpx is not None:
         else:
             st.dataframe(gpx_raw_df, width="stretch")
         if gpx_raw_df.empty:
-        st.warning("No GPX profile can be built because the raw GPX table is empty.")
-    else:
-        race_length_km = float(gpx_raw_df["distance_from_start_m"].max()) / 1000.0
-        expected_aid_stations = ceil(race_length_km / 10.0)
+            st.warning("No GPX profile can be built because the raw GPX table is empty.")
+        else:
+            race_length_km = float(gpx_raw_df["distance_from_start_m"].max()) / 1000.0
+            expected_aid_stations = ceil(race_length_km / 10.0)
 
         submitted = False
         enhanced_race_profile_df = None
