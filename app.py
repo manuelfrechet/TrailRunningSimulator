@@ -31,7 +31,7 @@ with st.expander("Raw FIT table", expanded=False):
     else:
         #st.dataframe(record_df, width="stretch") ----> To print the full table
         st.dataframe(record_df.head(10), width="stretch")
-        st.write(f"{len(record_df):,} rows")
+        st.write(f"Only 10 of the {len(record_df):,} rows displayed")
 
 st.divider()
 
