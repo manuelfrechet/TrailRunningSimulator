@@ -30,7 +30,7 @@ with st.expander("Raw FIT table", expanded=False):
         st.warning("No record messages were found in this FIT file.")
     else:
         #st.dataframe(record_df, width="stretch") ----> To print the full table
-        st.dataframe(record_df.head(10), width="stretch")
+        st.dataframe(record_df.head(11), width="stretch")
         st.write(f"Only 10 of the {len(record_df):,} rows displayed")
 
 st.divider()
@@ -52,7 +52,9 @@ if uploaded_gpx is not None:
         if gpx_raw_df.empty:
             st.warning("No track points were found in this GPX file.")
         else:
-            st.dataframe(gpx_raw_df, width="stretch")
+            #st.dataframe(gpx_raw_df, width="stretch") ----> To print the full table
+            st.dataframe(gpx_raw_df.head(11), width="stretch")
+            st.write(f"Only 10 of the {len(gpx_raw_df):,} rows displayed")
     
     if gpx_raw_df.empty:
         st.warning("No GPX profile can be built because the raw GPX table is empty.")
