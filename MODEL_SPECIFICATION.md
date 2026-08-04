@@ -643,3 +643,416 @@ The next part of this specification defines the transition laws:
 - what is deterministic,
 - what is learned,
 - and how the system evolves from one 50 m segment to the next.
+
+---
+
+# 19. State Transition Laws
+
+## 19.1 General Principle
+
+The Trail Running Simulator is modeled as a nonlinear dynamical system.
+
+At segment \(k\), the simulator knows the complete state vector
+
+\[
+x_k=(T_k,R_k,I_k,H_k,F_k,P_k,C_k)
+\]
+
+The simulator computes the duration of the current segment
+
+\[
+\Delta t_k
+\]
+
+and updates the complete state before moving to segment \(k+1\).
+
+The system therefore evolves according to
+
+\[
+x_{k+1}=\Phi(x_k)
+\]
+
+where
+
+\(\Phi\)
+
+is the unknown nonlinear evolution operator identified from historical FIT trajectories.
+
+The simulator therefore does not learn isolated observations.
+
+It learns the evolution law of the runner.
+
+---
+
+# 20. Deterministic and Learned Components
+
+The complete state contains both deterministic and learned components.
+
+## 20.1 Deterministic components
+
+These components are fully determined by the race profile or race definition.
+
+### Terrain State
+
+Terrain State is read directly from the normalized GPX profile.
+
+No learning is required.
+
+### Race Progression
+
+Race Progression evolves deterministically according to
+
+- elapsed distance
+- elapsed time
+- remaining distance
+- remaining ascent
+- remaining descent
+
+### Race Context
+
+Race Context remains constant during Version 1 simulations.
+
+---
+
+## 20.2 Learned components
+
+The following components are learned from historical FIT trajectories.
+
+- Runner State
+
+- Runner–Terrain Interaction
+
+- HR State
+
+- Fatigue State
+
+These components evolve according to unknown nonlinear differential laws identified during the learning phase.
+
+---
+
+# 21. Segment Evolution
+
+For every segment
+
+the simulator performs the following sequence.
+
+## Step 1
+
+Read deterministic inputs
+
+- Terrain State
+- Race Context
+- Race Progression
+
+for segment
+
+k.
+
+---
+
+## Step 2
+
+Use the current dynamic states
+
+- Runner State
+
+- HR State
+
+- Fatigue State
+
+- Runner–Terrain Interaction
+
+to estimate the runner response.
+
+---
+
+## Step 3
+
+Predict
+
+\[
+\Delta t_k
+\]
+
+the duration required to complete the current 50 m segment.
+
+---
+
+## Step 4
+
+Update
+
+Runner State
+
+---
+
+## Step 5
+
+Update
+
+Runner–Terrain Interaction
+
+---
+
+## Step 6
+
+Update
+
+HR State
+
+including
+
+- current HR
+
+- current HR zone
+
+- accumulated time in every zone
+
+- normalized time in every zone
+
+- continuous time in current zone
+
+- HR debt
+
+---
+
+## Step 7
+
+Update
+
+Fatigue State
+
+including
+
+- Cardiovascular Debt
+
+- Mechanical Debt
+
+- Neuromuscular Debt
+
+---
+
+## Step 8
+
+Update
+
+Race Progression.
+
+---
+
+## Step 9
+
+Move to the next segment.
+
+Repeat until finish.
+
+---
+
+# 22. Learning Objective
+
+Historical FIT trajectories are not used to predict speed directly.
+
+Instead,
+
+they are used to identify the evolution operator
+
+\[
+\Phi
+\]
+
+governing the complete dynamical system.
+
+Learning therefore consists of identifying
+
+- Runner State evolution
+
+- HR evolution
+
+- Fatigue evolution
+
+- Runner–Terrain Interaction evolution
+
+rather than fitting isolated observations.
+
+---
+
+# 23. Observation Model
+
+Historical FIT files are treated as observed trajectories.
+
+Every recorded point contributes information.
+
+Historical FIT trajectories remain at their native temporal resolution.
+
+No resampling to 50 m is performed during learning.
+
+This preserves
+
+- HR dynamics
+
+- recovery
+
+- debt accumulation
+
+- debt decay
+
+- interaction changes
+
+at the highest available resolution.
+
+---
+
+# 24. Simulation Grid
+
+The future race is represented by a deterministic numerical grid.
+
+Segment length
+
+Version 1
+
+=
+
+50 m
+
+This grid is used only for numerical integration.
+
+It is not used during learning.
+
+---
+
+# 25. Initialization
+
+At the beginning of a simulated race
+
+the simulator initializes
+
+## Terrain State
+
+First segment of the normalized GPX.
+
+---
+
+## Race Context
+
+User supplied values.
+
+---
+
+## Race Progression
+
+Distance = 0
+
+Elapsed time = 0
+
+Remaining distance = total race distance.
+
+---
+
+## Runner State
+
+Initial physiological state.
+
+Version 1 assumes
+
+fresh runner.
+
+---
+
+## HR State
+
+Initial HR
+
+Zone 1
+
+Zero accumulated exposure.
+
+Zero HR debt.
+
+---
+
+## Fatigue State
+
+Cardiovascular Debt = 0
+
+Mechanical Debt = 0
+
+Neuromuscular Debt = 0
+
+---
+
+# 26. Missing Variables
+
+Historical FIT files may contain different sensors.
+
+The simulator therefore accepts incomplete trajectories.
+
+Optional variables include
+
+- cadence
+
+- step length
+
+- stance time
+
+- vertical oscillation
+
+Missing variables are ignored.
+
+The simulator must continue learning from the remaining available information.
+
+The prediction quality is expected to improve with
+
+- richer FIT files
+
+- longer races
+
+- larger numbers of historical activities.
+
+---
+
+# 27. Version 1 Learning Philosophy
+
+Version 1 does not attempt to hard-code physiological equations.
+
+Instead,
+
+the simulator identifies the governing nonlinear evolution laws from observed runner trajectories.
+
+This applies especially to
+
+- HR debt accumulation
+
+- HR debt decay
+
+- fatigue accumulation
+
+- fatigue recovery
+
+- runner-terrain interaction
+
+The simulator therefore learns
+
+how the runner behaves,
+
+rather than assuming how the runner should behave.
+
+---
+
+# 28. End of Mathematical Specification
+
+The mathematical model described in this document defines the first complete version of the Trail Running Simulator.
+
+Subsequent versions may improve
+
+- state definitions
+
+- evolution laws
+
+- latent variables
+
+- environmental modeling
+
+- physiological modeling
+
+without changing the overall architecture described here.
+
