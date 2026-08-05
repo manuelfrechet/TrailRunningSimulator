@@ -3,13 +3,25 @@ from __future__ import annotations
 # -----------------------------------------------------------------------------
 # Simulation learning dataset builder
 # -----------------------------------------------------------------------------
-# This module builds a 50 m-aligned learning dataset from historical FIT-derived
-# runner feature tables.
+# This module builds a transition dataset from historical FIT-derived runner
+# feature tables.
 #
-# Version 1 goal:
+# The goal is to expose the model to the evolution law:
+#   current state -> next state
+#
+# Version 1:
 #   - resample each historical activity onto a fixed distance grid,
-#   - interpolate available numeric runner/terrain features,
-#   - derive a usable segment_duration_s target on that grid.
+#   - keep current-state features,
+#   - create forward-looking targets:
+#       * segment_duration_s
+#       * next_heart_rate_bpm
+#       * next_power
+#       * next_cadence_spm
+#       * next_speed_m_s
+#       * next_step_length_m
+#       * next_vertical_oscillation_mm
+#       * next_stance_time_s
+#       * next_accumulated_power
 # -----------------------------------------------------------------------------
 
 from typing import Any, Sequence
@@ -39,6 +51,26 @@ PREFERRED_COLUMN_ORDER = [
     "ascent_cumul_from_start_m",
     "descent_cumul_from_start_m",
     "grade_pct",
+    "heart_rate_bpm",
+    "power",
+    "cadence_spm",
+    "speed_m_s",
+    "step_length_m",
+    "vertical_oscillation_mm",
+    "stance_time_s",
+    "accumulated_power",
+    "next_heart_rate_bpm",
+    "next_power",
+    "next_cadence_spm",
+    "next_speed_m_s",
+    "next_step_length_m",
+    "next_vertical_oscillation_mm",
+    "next_stance_time_s",
+    "next_accumulated_power",
+]
+
+
+STATE_TARGET_COLUMNS = [
     "heart_rate_bpm",
     "power",
     "cadence_spm",
@@ -274,20 +306,14 @@ def _prepare_activity_frame(
         )
 
     # -------------------------------------------------------------------------
-    # Derived trajectory columns
+    # Derived transition columns
     # -------------------------------------------------------------------------
     out["time_from_start_s"] = pd.to_numeric(out["time_from_start_s"], errors="coerce")
-    out["segment_distance_m"] = out["distance_from_start_m"].diff()
+    out["segment_distance_m"] = out["distance_from_start_m"].shift(-1) - out["distance_from_start_m"]
     out["distance_delta_m"] = out["segment_distance_m"]
 
-    # -------------------------------------------------------------------------
-    # Build a robust segment duration target
-    # Priority:
-    #   1) time_from_start_s diff
-    #   2) distance / speed
-    #   3) synthetic row spacing if needed
-    # -------------------------------------------------------------------------
-    segment_duration_from_time = out["time_from_start_s"].diff()
+    # Forward-looking segment duration target.
+    segment_duration_from_time = out["time_from_start_s"].shift(-1) - out["time_from_start_s"]
 
     if "speed_m_s" in out.columns:
         speed = pd.to_numeric(out["speed_m_s"], errors="coerce").replace(0.0, np.nan)
@@ -300,9 +326,12 @@ def _prepare_activity_frame(
     else:
         out["segment_duration_s"] = segment_duration_from_time
 
-    # If still too sparse, use a synthetic fallback so the dataset is never empty.
-    if out["segment_duration_s"].notna().sum() == 0:
-        out["segment_duration_s"] = 1.0
+    # -------------------------------------------------------------------------
+    # Forward-looking state targets
+    # -------------------------------------------------------------------------
+    for col in STATE_TARGET_COLUMNS:
+        if col in out.columns:
+            out[f"next_{col}"] = out[col].shift(-1)
 
     # -------------------------------------------------------------------------
     # Remove rows that cannot be used for learning
@@ -310,10 +339,10 @@ def _prepare_activity_frame(
     out = out.dropna(subset=["segment_duration_s"])
 
     # -------------------------------------------------------------------------
-    # Derive terrain features consistently from the interpolated altitude
+    # Terrain features derived consistently from altitude
     # -------------------------------------------------------------------------
     if "altitude_m" in out.columns:
-        out["altitude_delta_m"] = out["altitude_m"].diff()
+        out["altitude_delta_m"] = out["altitude_m"].shift(-1) - out["altitude_m"]
         out["ascent_delta_m"] = out["altitude_delta_m"].clip(lower=0.0)
         out["descent_delta_m"] = (-out["altitude_delta_m"].clip(upper=0.0))
         out["ascent_cumul_from_start_m"] = out["ascent_delta_m"].fillna(0.0).cumsum()
@@ -347,7 +376,7 @@ def build_simulation_dataset(
     segment_length_m: float = 50.0,
 ) -> pd.DataFrame:
     """
-    Build a 50 m-aligned learning dataframe from multiple historical activities.
+    Build a transition dataset from multiple historical activities.
     """
     if activities is None:
         return pd.DataFrame()
@@ -389,7 +418,7 @@ def build_simulation_dataset(
 
 def summarize_simulation_dataset(dataset: pd.DataFrame) -> dict[str, Any]:
     """
-    Compact summary of the 50 m-aligned learning dataset.
+    Compact summary of the transition dataset.
     """
     if dataset is None or dataset.empty:
         return {
