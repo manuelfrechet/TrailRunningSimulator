@@ -12,9 +12,8 @@ from __future__ import annotations
 #   - return the predicted trajectory.
 #
 # Important stabilization rule:
-#   - the simulator does NOT feed its own predicted physiological state back
-#     into the next segment yet.
-#   - only deterministic race progression and terrain are carried forward.
+#   - the simulator DOES feed back its predicted physiological state,
+#   - but with a damped update so the system can evolve without exploding.
 # -----------------------------------------------------------------------------
 
 from dataclasses import dataclass
@@ -40,6 +39,18 @@ class SimulationResult:
 # Helpers
 # -----------------------------------------------------------------------------
 
+TARGET_TO_STATE = {
+    "next_heart_rate_bpm": "heart_rate_bpm",
+    "next_power": "power",
+    "next_cadence_spm": "cadence_spm",
+    "next_speed_m_s": "speed_m_s",
+    "next_step_length_m": "step_length_m",
+    "next_vertical_oscillation_mm": "vertical_oscillation_mm",
+    "next_stance_time_s": "stance_time_s",
+    "next_accumulated_power": "accumulated_power",
+}
+
+
 def _ensure_required_columns(profile_df: pd.DataFrame) -> pd.DataFrame:
     if profile_df is None or profile_df.empty:
         return pd.DataFrame()
@@ -55,7 +66,7 @@ def _build_feature_row(
     current_state: dict[str, Any],
 ) -> dict[str, Any]:
     """
-    Merge the current deterministic/dynamic state with the current race-profile row.
+    Merge the current dynamic state with the current race-profile row.
     Race-profile values override the state for terrain-derived fields.
     """
     row_dict = profile_row.to_dict()
@@ -183,15 +194,47 @@ def simulate_race(
         output_rows.append(out_row)
 
         # ---------------------------------------------------------------------
-        # Important stabilization rule
+        # Recursive state feedback with damping
         # ---------------------------------------------------------------------
-        # Do NOT feed predicted physiological values back into the next segment
-        # yet. This prevents runaway feedback in the first baseline version.
-        #
-        # We only carry deterministic progression and terrain forward.
+        # This reintroduces state evolution while avoiding uncontrolled growth.
+        # The model can now make the next segment faster or slower depending on
+        # how the state evolves.
         # ---------------------------------------------------------------------
+        feedback_alpha = 0.35  # 0 = no feedback, 1 = full overwrite
+
+        for target_col, state_col in TARGET_TO_STATE.items():
+            if target_col in predicted_state_updates:
+                predicted_value = predicted_state_updates[target_col]
+                current_value = current_state.get(state_col, np.nan)
+
+                if pd.notna(predicted_value):
+                    if pd.isna(current_value):
+                        blended_value = float(predicted_value)
+                    else:
+                        blended_value = (
+                            (1.0 - feedback_alpha) * float(current_value)
+                            + feedback_alpha * float(predicted_value)
+                        )
+
+                    # Keep values numerically safe.
+                    if state_col in {
+                        "heart_rate_bpm",
+                        "power",
+                        "cadence_spm",
+                        "speed_m_s",
+                        "step_length_m",
+                        "vertical_oscillation_mm",
+                        "stance_time_s",
+                        "accumulated_power",
+                    }:
+                        blended_value = max(0.0, blended_value)
+
+                    current_state[state_col] = blended_value
+
+        # Keep accumulated time updated for the next step.
         current_state["time_from_start_s"] = cumulative_time_s
 
+        # Preserve deterministic terrain/progression fields for the next step.
         for col in [
             "distance_from_start_m",
             "segment_distance_m",
