@@ -96,6 +96,19 @@ def _prepare_current_state(model: TransitionModel) -> dict[str, Any]:
     return current_state
 
 
+def _format_hhmmss(seconds: float) -> str:
+    """
+    Format a duration in seconds as HH:MM:SS.
+    """
+    if seconds is None or not np.isfinite(seconds):
+        return ""
+
+    total_seconds = int(round(float(seconds)))
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, secs = divmod(remainder, 60)
+    return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+
+
 # -----------------------------------------------------------------------------
 # Public API
 # -----------------------------------------------------------------------------
@@ -168,9 +181,7 @@ def simulate_race(
         out_row["current_time_from_start_s"] = current_state.get("time_from_start_s", 0.0)
         out_row["predicted_segment_duration_s"] = predicted_duration_s
         out_row["predicted_cumulative_time_s"] = cumulative_time_s
-        out_row["predicted_cumulative_time_hh:mm:ss"] = str(
-            pd.to_timedelta(cumulative_time_s, unit="s")
-        )
+        out_row["predicted_cumulative_time_hh:mm:ss"] = _format_hhmmss(cumulative_time_s)
 
         # Store the raw predictions
         for target_col, value in predicted_state_updates.items():
