@@ -5,12 +5,10 @@ from __future__ import annotations
 # -----------------------------------------------------------------------------
 # Current responsibilities:
 #   1) Build the learning dataset from multiple historical FIT files.
-#   2) Fit a first baseline system-identification model.
-#   3) Build the future race profile from a GPX file and aid stations.
-#   4) Run a first baseline simulation on the normalized race profile.
-#
-# No advanced state-transition loop yet.
-# The goal here is to get an end-to-end version running cleanly.
+#   2) Build a 50 m-aligned learning dataset for the first baseline model.
+#   3) Fit the first system-identification model.
+#   4) Build the future race profile from a GPX file and aid stations.
+#   5) Run a first baseline simulation on the normalized race profile.
 # -----------------------------------------------------------------------------
 
 from math import ceil
@@ -22,9 +20,9 @@ from features import build_features
 from gpx_parser import parse_gpx_to_table
 from gpx_segments import build_fixed_distance_segments, enhance_race_profile_with_breakpoints
 from parser import parse_fit_to_tables
+from simulation_dataset import build_simulation_dataset, summarize_simulation_dataset
 from simulator import simulate_race, summarize_simulation
 from system_identification import fit_system_identification
-from simulation_dataset import build_simulation_dataset, summarize_simulation_dataset
 from training_dataset import activity_summary_table, build_training_dataset, summarize_training_dataset
 
 
@@ -221,9 +219,9 @@ if uploaded_fit_files:
                 simulation_learning_df
             )
 
-            # -------------------------------------------------------------
+            # -----------------------------------------------------------------
             # Fit the first baseline system identification model
-            # -------------------------------------------------------------
+            # -----------------------------------------------------------------
             with st.spinner("Fitting baseline system-identification model..."):
                 try:
                     system_model = fit_system_identification(simulation_learning_df)
@@ -237,11 +235,13 @@ if uploaded_fit_files:
                     st.error(f"System identification failed: {exc}")
 
     else:
+        st.session_state["system_model"] = None
         st.warning(
             "None of the uploaded FIT files produced usable runner features. "
             "Please check that the files contain record messages."
         )
 else:
+    st.session_state["system_model"] = None
     st.info("Upload one or more FIT files to build the learning dataset.")
 
 
@@ -299,7 +299,7 @@ else:
 
     else:
         # ---------------------------------------------------------------------
-        # Course length and aid station planning
+        # Course length and aid-station planning
         # ---------------------------------------------------------------------
         race_length_km = float(gpx_raw_df["distance_from_start_m"].max()) / 1000.0
         expected_aid_stations = ceil(race_length_km / 10.0)
@@ -357,9 +357,8 @@ else:
                 # -------------------------------------------------------------
                 # Clean aid station input
                 # -------------------------------------------------------------
-                aid_stations_df = pd.DataFrame(aid_station_rows)
                 aid_stations_df = _clean_aid_stations(
-                    aid_stations_df,
+                    pd.DataFrame(aid_station_rows),
                     race_length_km,
                 )
 
@@ -420,7 +419,7 @@ else:
                     st.dataframe(profile_df, width="stretch")
 
         # ---------------------------------------------------------------------
-        # Simulation preview
+        # Simulation output
         # ---------------------------------------------------------------------
         if st.session_state["simulation_result"] is not None:
             with st.expander("Simulation output", expanded=False):
