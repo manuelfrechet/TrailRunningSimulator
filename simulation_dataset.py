@@ -6,11 +6,6 @@ from __future__ import annotations
 # This module builds a 50 m-aligned learning dataset from historical FIT-derived
 # runner feature tables.
 #
-# It is a bridge module:
-#   - training_dataset.py keeps the native-resolution historical data,
-#   - this module prepares the data used to teach the baseline simulator how a
-#     50 m segment behaves.
-#
 # Version 1 goal:
 #   - resample each historical activity onto a fixed distance grid,
 #   - interpolate the available numeric runner/terrain features,
@@ -139,6 +134,40 @@ def _interpolate_datetime(
     return pd.to_datetime(interp_vals, unit="ns", errors="coerce")
 
 
+def _ensure_distance_axis(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Ensure that a usable cumulative distance axis exists.
+
+    Priority:
+      1) distance_from_start_m
+      2) reconstructed from distance_delta_m
+      3) synthetic row-order axis as a last resort
+    """
+    out = df.copy()
+
+    if "distance_from_start_m" in out.columns:
+        out["distance_from_start_m"] = pd.to_numeric(out["distance_from_start_m"], errors="coerce")
+
+        if out["distance_from_start_m"].notna().any():
+            return out
+
+    # -------------------------------------------------------------------------
+    # Reconstruct from delta distance if possible
+    # -------------------------------------------------------------------------
+    if "distance_delta_m" in out.columns:
+        delta = pd.to_numeric(out["distance_delta_m"], errors="coerce").fillna(0.0)
+        reconstructed = delta.cumsum()
+        out["distance_from_start_m"] = reconstructed
+        if out["distance_from_start_m"].notna().any():
+            return out
+
+    # -------------------------------------------------------------------------
+    # Final fallback: synthetic axis from row order
+    # -------------------------------------------------------------------------
+    out["distance_from_start_m"] = np.arange(len(out), dtype=float)
+    return out
+
+
 def _prepare_activity_frame(
     activity_df: pd.DataFrame,
     activity_id: int,
@@ -156,8 +185,7 @@ def _prepare_activity_frame(
     if "timestamp" in df.columns:
         df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
 
-    if "distance_from_start_m" not in df.columns:
-        return pd.DataFrame()
+    df = _ensure_distance_axis(df)
 
     df["distance_from_start_m"] = pd.to_numeric(df["distance_from_start_m"], errors="coerce")
     df = df.dropna(subset=["distance_from_start_m"])
@@ -231,8 +259,6 @@ def _prepare_activity_frame(
 
     # -------------------------------------------------------------------------
     # Interpolate every useful numeric column available in the source.
-    # We keep this generic so the first model can use as much information as
-    # possible without hard-coding a special feature list here.
     # -------------------------------------------------------------------------
     ignored_columns = {
         "activity_id",
