@@ -3,26 +3,22 @@ from __future__ import annotations
 # -----------------------------------------------------------------------------
 # Simulator layer
 # -----------------------------------------------------------------------------
-# This module applies a learned model to a normalized race profile.
+# This module applies a learned transition model to a normalized race profile.
 #
-# Version 1 goal:
-#   - iterate through the 50 m race segments,
-#   - predict the duration of each segment,
+# Version 1:
+#   - iterate through the race profile segment by segment,
+#   - predict the next state and segment duration,
 #   - accumulate total time,
-#   - produce a simple simulation output table.
-#
-# No parsing logic lives here.
-# No Streamlit logic lives here.
-# No training logic lives here.
+#   - return the predicted trajectory.
 # -----------------------------------------------------------------------------
 
 from dataclasses import dataclass
-from typing import Any, Iterable
+from typing import Any
 
 import numpy as np
 import pandas as pd
 
-from system_identification import SystemIdentificationModel
+from system_identification import TransitionModel, predict_next_state
 
 
 # -----------------------------------------------------------------------------
@@ -31,16 +27,6 @@ from system_identification import SystemIdentificationModel
 
 @dataclass
 class SimulationResult:
-    """
-    Container for the simulation output.
-
-    Attributes
-    ----------
-    segments:
-        DataFrame containing the predicted per-segment trajectory.
-    summary:
-        Compact dictionary with simulation-level metrics.
-    """
     segments: pd.DataFrame
     summary: dict[str, Any]
 
@@ -49,13 +35,19 @@ class SimulationResult:
 # Helpers
 # -----------------------------------------------------------------------------
 
-def _ensure_required_columns(profile_df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Ensure the race profile contains the minimum columns required by Version 1.
+TARGET_TO_STATE = {
+    "next_heart_rate_bpm": "heart_rate_bpm",
+    "next_power": "power",
+    "next_cadence_spm": "cadence_spm",
+    "next_speed_m_s": "speed_m_s",
+    "next_step_length_m": "step_length_m",
+    "next_vertical_oscillation_mm": "vertical_oscillation_mm",
+    "next_stance_time_s": "stance_time_s",
+    "next_accumulated_power": "accumulated_power",
+}
 
-    For now we require:
-      - distance_from_start_m
-    """
+
+def _ensure_required_columns(profile_df: pd.DataFrame) -> pd.DataFrame:
     if profile_df is None or profile_df.empty:
         return pd.DataFrame()
 
@@ -65,24 +57,43 @@ def _ensure_required_columns(profile_df: pd.DataFrame) -> pd.DataFrame:
     return profile_df.copy()
 
 
-def _compute_cumulative_time(segment_duration_s: pd.Series) -> pd.Series:
+def _build_feature_row(
+    profile_row: pd.Series,
+    current_state: dict[str, Any],
+) -> dict[str, Any]:
     """
-    Compute cumulative race time from segment durations.
+    Merge the current dynamic state with the current race-profile row.
+    Race-profile values override the dynamic state for terrain-derived fields.
     """
-    return segment_duration_s.fillna(0.0).cumsum()
+    row_dict = profile_row.to_dict()
+    feature_row = dict(current_state)
+    feature_row.update(row_dict)
+    return feature_row
 
 
-def _compute_segment_duration_from_distance(profile_df: pd.DataFrame) -> pd.Series:
+def _prepare_current_state(model: TransitionModel) -> dict[str, Any]:
     """
-    Compute the nominal segment distance.
+    Start from the learned initial state and enforce a few race-start defaults.
+    """
+    current_state = dict(model.initial_state)
 
-    In Version 1 the profile is expected to be normalized to 50 m segments,
-    but we compute the distance directly so the simulator remains robust.
-    """
-    distance = pd.to_numeric(profile_df["distance_from_start_m"], errors="coerce")
-    segment_distance = distance.diff()
-    segment_distance.iloc[0] = np.nan
-    return segment_distance
+    # Race starts at zero elapsed time.
+    current_state["time_from_start_s"] = 0.0
+
+    # Use the learned initial state for runner variables, but keep it safe.
+    for col in [
+        "heart_rate_bpm",
+        "power",
+        "cadence_spm",
+        "speed_m_s",
+        "step_length_m",
+        "vertical_oscillation_mm",
+        "stance_time_s",
+        "accumulated_power",
+    ]:
+        current_state.setdefault(col, 0.0)
+
+    return current_state
 
 
 # -----------------------------------------------------------------------------
@@ -91,22 +102,10 @@ def _compute_segment_duration_from_distance(profile_df: pd.DataFrame) -> pd.Seri
 
 def simulate_race(
     race_profile_df: pd.DataFrame,
-    model: SystemIdentificationModel,
+    model: TransitionModel,
 ) -> SimulationResult:
     """
-    Simulate the race profile segment by segment using the fitted model.
-
-    Parameters
-    ----------
-    race_profile_df:
-        Normalized race profile, typically 50 m segments.
-    model:
-        Fitted system-identification model used to estimate segment duration.
-
-    Returns
-    -------
-    SimulationResult
-        Per-segment predictions plus a compact summary.
+    Simulate the race profile segment by segment using the learned transition model.
     """
     if model is None:
         raise ValueError("model is required.")
@@ -123,38 +122,92 @@ def simulate_race(
             },
         )
 
-    # -------------------------------------------------------------------------
-    # Predict a baseline segment duration for every row in the profile.
-    # -------------------------------------------------------------------------
     segments = profile.copy().reset_index(drop=True)
 
-    # The simulator currently delegates prediction to the learned baseline model.
-    # In later versions, this will become a true state-by-state transition loop.
-    segments["predicted_segment_duration_s"] = model.predict(segments)
+    # -------------------------------------------------------------------------
+    # Initialize the dynamic state at race start.
+    # -------------------------------------------------------------------------
+    current_state = _prepare_current_state(model)
+    cumulative_time_s = 0.0
 
-    # -------------------------------------------------------------------------
-    # Cumulative time
-    # -------------------------------------------------------------------------
-    segments["predicted_cumulative_time_s"] = _compute_cumulative_time(
-        segments["predicted_segment_duration_s"]
-    )
+    output_rows: list[dict[str, Any]] = []
 
-    # -------------------------------------------------------------------------
-    # Convenience columns
-    # -------------------------------------------------------------------------
-    segments["predicted_segment_distance_m"] = _compute_segment_duration_from_distance(
-        segments
-    )
+    for _, profile_row in segments.iterrows():
+        # ---------------------------------------------------------------------
+        # Build model input for this segment
+        # ---------------------------------------------------------------------
+        current_state["time_from_start_s"] = cumulative_time_s
 
-    # -------------------------------------------------------------------------
-    # Simulation summary
-    # -------------------------------------------------------------------------
-    total_predicted_time_s = float(
-        segments["predicted_segment_duration_s"].sum(skipna=True)
-    )
-    n_segments = int(len(segments))
+        feature_row = _build_feature_row(profile_row, current_state)
+        feature_df = pd.DataFrame([feature_row])
+
+        # ---------------------------------------------------------------------
+        # Predict the next state and the segment duration
+        # ---------------------------------------------------------------------
+        predicted = predict_next_state(model, feature_df)
+
+        if predicted.empty:
+            predicted_duration_s = 1.0
+            predicted_state_updates: dict[str, Any] = {}
+        else:
+            predicted_duration_s = float(predicted["segment_duration_s"].iloc[0])
+            if not np.isfinite(predicted_duration_s) or predicted_duration_s <= 0.0:
+                predicted_duration_s = 1.0
+
+            predicted_state_updates = predicted.iloc[0].to_dict()
+
+        # ---------------------------------------------------------------------
+        # Advance time
+        # ---------------------------------------------------------------------
+        cumulative_time_s += predicted_duration_s
+
+        # ---------------------------------------------------------------------
+        # Build the output row
+        # ---------------------------------------------------------------------
+        out_row = profile_row.to_dict()
+        out_row["current_time_from_start_s"] = current_state.get("time_from_start_s", 0.0)
+        out_row["predicted_segment_duration_s"] = predicted_duration_s
+        out_row["predicted_cumulative_time_s"] = cumulative_time_s
+
+        # Store the raw predictions
+        for target_col, value in predicted_state_updates.items():
+            out_row[f"predicted_{target_col}"] = value
+
+        output_rows.append(out_row)
+
+        # ---------------------------------------------------------------------
+        # Update the dynamic state for the next segment
+        # ---------------------------------------------------------------------
+        for target_col, state_col in TARGET_TO_STATE.items():
+            if target_col in predicted_state_updates:
+                current_state[state_col] = predicted_state_updates[target_col]
+
+        # Keep accumulated time updated for the next step.
+        current_state["time_from_start_s"] = cumulative_time_s
+
+        # Preserve the current terrain progression fields in the state so they
+        # can be available as context in the next prediction.
+        for col in [
+            "distance_from_start_m",
+            "segment_distance_m",
+            "distance_delta_m",
+            "altitude_m",
+            "altitude_delta_m",
+            "ascent_delta_m",
+            "descent_delta_m",
+            "ascent_cumul_from_start_m",
+            "descent_cumul_from_start_m",
+            "grade_pct",
+        ]:
+            if col in profile_row.index:
+                current_state[col] = profile_row[col]
+
+    result_df = pd.DataFrame(output_rows)
+
+    total_predicted_time_s = float(result_df["predicted_segment_duration_s"].sum(skipna=True))
+    n_segments = int(len(result_df))
     mean_segment_duration_s = (
-        float(segments["predicted_segment_duration_s"].mean(skipna=True))
+        float(result_df["predicted_segment_duration_s"].mean(skipna=True))
         if n_segments > 0
         else 0.0
     )
@@ -166,17 +219,13 @@ def simulate_race(
     }
 
     return SimulationResult(
-        segments=segments,
+        segments=result_df,
         summary=summary,
     )
 
 
 def summarize_simulation(result: SimulationResult) -> dict[str, Any]:
-    """
-    Return the simulation summary in a convenient dictionary form.
-    """
     if result is None:
         return {}
-
     return dict(result.summary)
-  
+    
