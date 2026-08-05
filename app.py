@@ -264,7 +264,7 @@ else:
             default_aid_station_rows = pd.DataFrame(
                 {
                     "aid_station_name": [""] * expected_aid_stations,
-                    "aid_station_km": [0.0] * expected_aid_stations,
+                    "aid_station_km": [0.00] * expected_aid_stations,
                 }
             )
 
@@ -280,9 +280,9 @@ else:
                         ),
                         "aid_station_km": st.column_config.NumberColumn(
                             "aid station km",
-                            min_value=0.0,
+                            min_value=0.00,
                             max_value=race_length_km,
-                            step=0.1,
+                            step=0.01,
                         ),
                     },
                 )
