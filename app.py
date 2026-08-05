@@ -7,8 +7,10 @@ from __future__ import annotations
 #   1) Build the learning dataset from multiple historical FIT files.
 #   2) Fit a first baseline system-identification model.
 #   3) Build the future race profile from a GPX file and aid stations.
+#   4) Run a first baseline simulation on the normalized race profile.
 #
-# No simulator loop yet.
+# No advanced state-transition loop yet.
+# The goal here is to get an end-to-end version running cleanly.
 # -----------------------------------------------------------------------------
 
 from math import ceil
@@ -20,6 +22,7 @@ from features import build_features
 from gpx_parser import parse_gpx_to_table
 from gpx_segments import build_fixed_distance_segments, enhance_race_profile_with_breakpoints
 from parser import parse_fit_to_tables
+from simulator import simulate_race, summarize_simulation
 from system_identification import fit_system_identification
 from training_dataset import activity_summary_table, build_training_dataset, summarize_training_dataset
 
@@ -57,7 +60,7 @@ def _load_fit_activity(uploaded_file):
 
 def _clean_aid_stations(editor_df: pd.DataFrame, race_length_km: float) -> pd.DataFrame:
     """
-    Clean the aid-station editor output and keep only valid rows.
+    Clean the aid-station input and keep only valid rows.
     """
     aid_stations_df = editor_df.copy()
 
@@ -94,11 +97,17 @@ def _clean_aid_stations(editor_df: pd.DataFrame, race_length_km: float) -> pd.Da
 # Session state initialization
 # -----------------------------------------------------------------------------
 
+if "system_model" not in st.session_state:
+    st.session_state["system_model"] = None
+
 if "enhanced_race_profile_df" not in st.session_state:
     st.session_state["enhanced_race_profile_df"] = None
 
 if "gpx_file_name" not in st.session_state:
     st.session_state["gpx_file_name"] = None
+
+if "simulation_result" not in st.session_state:
+    st.session_state["simulation_result"] = None
 
 
 # -----------------------------------------------------------------------------
@@ -192,13 +201,15 @@ if uploaded_fit_files:
                 st.dataframe(activity_summary_df, width="stretch")
 
         # ---------------------------------------------------------------------
-        # Fit the first baseline system-identification model
+        # Fit the first baseline system identification model
         # ---------------------------------------------------------------------
         with st.spinner("Fitting baseline system-identification model..."):
             try:
-                _ = fit_system_identification(training_dataset_df)
+                system_model = fit_system_identification(training_dataset_df)
+                st.session_state["system_model"] = system_model
                 st.success("Historical learning completed successfully.")
             except Exception as exc:
+                st.session_state["system_model"] = None
                 st.error(f"System identification failed: {exc}")
 
     else:
@@ -234,6 +245,7 @@ if uploaded_gpx is None:
     st.info("Upload a GPX file to build the future race profile.")
     st.session_state["enhanced_race_profile_df"] = None
     st.session_state["gpx_file_name"] = None
+    st.session_state["simulation_result"] = None
 
 else:
     # -------------------------------------------------------------------------
@@ -242,6 +254,7 @@ else:
     if st.session_state["gpx_file_name"] != uploaded_gpx.name:
         st.session_state["enhanced_race_profile_df"] = None
         st.session_state["gpx_file_name"] = uploaded_gpx.name
+        st.session_state["simulation_result"] = None
 
     st.success(f"GPX file received: {uploaded_gpx.name}")
 
@@ -262,7 +275,7 @@ else:
 
     else:
         # ---------------------------------------------------------------------
-        # Course length and aid-station planning
+        # Course length and aid station planning
         # ---------------------------------------------------------------------
         race_length_km = float(gpx_raw_df["distance_from_start_m"].max()) / 1000.0
         expected_aid_stations = ceil(race_length_km / 10.0)
@@ -305,8 +318,7 @@ else:
                         )
 
                     # -------------------------------------------------
-                    # Keep only rows that have a non-empty name.
-                    # The cleaning function will remove anything invalid.
+                    # Keep every row; cleaning will remove invalid ones.
                     # -------------------------------------------------
                     aid_station_rows.append(
                         {
@@ -348,6 +360,26 @@ else:
 
                 st.session_state["enhanced_race_profile_df"] = enhanced_race_profile_df
 
+                # -------------------------------------------------------------
+                # Run the first baseline simulation
+                # -------------------------------------------------------------
+                if st.session_state["system_model"] is None:
+                    st.warning(
+                        "No learned model is available yet. Upload FIT files first "
+                        "to train the simulator."
+                    )
+                    st.session_state["simulation_result"] = None
+                else:
+                    try:
+                        simulation_result = simulate_race(
+                            enhanced_race_profile_df,
+                            st.session_state["system_model"],
+                        )
+                        st.session_state["simulation_result"] = simulation_result
+                    except Exception as exc:
+                        st.session_state["simulation_result"] = None
+                        st.error(f"Simulation failed: {exc}")
+
         # ---------------------------------------------------------------------
         # Race profile preview
         # ---------------------------------------------------------------------
@@ -362,4 +394,20 @@ else:
                     st.warning("No enhanced race profile could be built.")
                 else:
                     st.dataframe(profile_df, width="stretch")
+
+        # ---------------------------------------------------------------------
+        # Simulation preview
+        # ---------------------------------------------------------------------
+        if st.session_state["simulation_result"] is not None:
+            with st.expander("Simulation output", expanded=False):
+                simulation_result = st.session_state["simulation_result"]
+                simulation_summary = summarize_simulation(simulation_result)
+
+                st.write("Simulation summary")
+                st.json(simulation_summary)
+
+                if simulation_result.segments.empty:
+                    st.warning("No simulated race segments could be produced.")
+                else:
+                    st.dataframe(simulation_result.segments, width="stretch")
                     
