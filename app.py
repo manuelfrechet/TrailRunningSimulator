@@ -20,11 +20,7 @@ from features import build_features
 from gpx_parser import parse_gpx_to_table
 from gpx_segments import build_fixed_distance_segments, enhance_race_profile_with_breakpoints
 from parser import parse_fit_to_tables
-from system_identification import (
-    fit_system_identification,
-    predict_segment_duration,
-    summarize_system_identification,
-)
+from system_identification import fit_system_identification
 from training_dataset import activity_summary_table, build_training_dataset, summarize_training_dataset
 
 
@@ -167,8 +163,17 @@ if uploaded_fit_files:
         # Training dataset summary
         # ---------------------------------------------------------------------
         with st.expander("Training dataset summary", expanded=False):
-            st.write("This summary helps verify that the learning data was built correctly.")
-            st.json(training_dataset_summary)
+            st.write(f"Activities: {training_dataset_summary['n_activities']}")
+            st.write(f"Rows: {training_dataset_summary['n_rows']}")
+            st.write(
+                f"Rows with segment duration: "
+                f"{training_dataset_summary['n_rows_with_segment_duration']}"
+            )
+            st.write(
+                f"Rows missing segment duration: "
+                f"{training_dataset_summary['n_rows_missing_segment_duration']}"
+            )
+            st.write(f"Columns: {training_dataset_summary['n_columns']}")
 
             if skipped_fit_files:
                 st.warning(
@@ -187,66 +192,12 @@ if uploaded_fit_files:
                 st.dataframe(activity_summary_df, width="stretch")
 
         # ---------------------------------------------------------------------
-        # Dataset preview
-        # ---------------------------------------------------------------------
-        with st.expander("Training dataset preview", expanded=False):
-            st.dataframe(training_dataset_df.head(200), width="stretch")
-
-        # ---------------------------------------------------------------------
-        # First baseline system identification
+        # Fit the first baseline system-identification model
         # ---------------------------------------------------------------------
         with st.spinner("Fitting baseline system-identification model..."):
             try:
-                system_model = fit_system_identification(training_dataset_df)
-                system_summary = summarize_system_identification(system_model)
-
-                st.success("Baseline system-identification model fitted successfully.")
-
-                with st.expander("System identification summary", expanded=False):
-                    st.json(system_summary)
-
-                    coefficients_df = pd.DataFrame(
-                        {
-                            "feature": system_model.feature_columns,
-                            "coefficient": system_model.coefficients,
-                        }
-                    )
-                    coefficients_df["abs_coefficient"] = coefficients_df["coefficient"].abs()
-                    coefficients_df = coefficients_df.sort_values(
-                        "abs_coefficient",
-                        ascending=False,
-                    ).drop(columns=["abs_coefficient"])
-
-                    st.subheader("Model coefficients")
-                    st.dataframe(coefficients_df, width="stretch")
-
-                # -----------------------------------------------------------------
-                # Quick training preview
-                # -----------------------------------------------------------------
-                with st.expander("Training prediction preview", expanded=False):
-                    preview_df = training_dataset_df.copy()
-                    preview_df["predicted_segment_duration_s"] = predict_segment_duration(
-                        system_model,
-                        preview_df,
-                    )
-
-                    preview_columns = [
-                        col
-                        for col in [
-                            "activity_id",
-                            "activity_name",
-                            "sample_id",
-                            "segment_duration_s",
-                            "predicted_segment_duration_s",
-                        ]
-                        if col in preview_df.columns
-                    ]
-
-                    st.dataframe(
-                        preview_df[preview_columns].head(200),
-                        width="stretch",
-                    )
-
+                _ = fit_system_identification(training_dataset_df)
+                st.success("Historical learning completed successfully.")
             except Exception as exc:
                 st.error(f"System identification failed: {exc}")
 
@@ -316,7 +267,7 @@ else:
         race_length_km = float(gpx_raw_df["distance_from_start_m"].max()) / 1000.0
         expected_aid_stations = ceil(race_length_km / 10.0)
 
-                # ---------------------------------------------------------------------
+        # ---------------------------------------------------------------------
         # Aid-station input section
         # ---------------------------------------------------------------------
         with st.expander("Aid stations", expanded=True):
