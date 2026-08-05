@@ -328,28 +328,50 @@ else:
             default_aid_station_rows = pd.DataFrame(
                 {
                     "aid_station_name": [""] * expected_aid_stations,
-                    "aid_station_km": [0.0] * expected_aid_stations,
+                    "aid_station_km": [0.00] * expected_aid_stations,
                 }
             )
 
             with st.form(key="aid_station_form"):
-                aid_station_input_df = st.data_editor(
-                    default_aid_station_rows,
-                    num_rows="fixed",
-                    hide_index=True,
-                    width="stretch",
-                    column_config={
-                        "aid_station_name": st.column_config.TextColumn(
-                            "aid station name"
-                        ),
-                        "aid_station_km": st.column_config.NumberColumn(
-                            "aid station km",
+                for i in range(expected_aid_stations):
+                    col1, col2 = st.columns(2)
+
+                    with col1:
+                        station_name = st.text_input(
+                            f"Aid-station {i + 1} - name",
+                            key=f"aid_name_{i}",
+                        )
+
+                    with col2:
+                        station_km = st.number_input(
+                            f"Aid-station {i + 1} - km",
                             min_value=0.0,
                             max_value=race_length_km,
-                            step=0.1,
-                        ),
-                    },
-                )
+                            value=0.00,
+                            step=0.01,
+                            format="%.2f",
+                            key=f"aid_km_{i}",
+                        )
+            
+            #with st.form(key="aid_station_form"):
+            #    aid_station_input_df = st.data_editor(
+            #        default_aid_station_rows,
+            #        num_rows="fixed",
+            #        hide_index=True,
+            #        width="stretch",
+            #        column_config={
+            #            "aid_station_name": st.column_config.TextColumn(
+            #                "aid station name"
+            #            ),
+            #            "aid_station_km": st.column_config.NumberColumn(
+            #                "aid station km",
+            #                min_value=0.0,
+            #                max_value=race_length_km,
+            #                step=0.01,
+            #                format="%.2f"
+            #            ),
+            #        },
+            #    )
 
                 submitted = st.form_submit_button("Build race profile")
 
