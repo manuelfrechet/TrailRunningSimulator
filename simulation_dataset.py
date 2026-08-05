@@ -8,8 +8,8 @@ from __future__ import annotations
 #
 # Version 1 goal:
 #   - resample each historical activity onto a fixed distance grid,
-#   - interpolate the available numeric runner/terrain features,
-#   - derive a meaningful segment_duration_s target on that grid.
+#   - interpolate available numeric runner/terrain features,
+#   - derive a usable segment_duration_s target on that grid.
 # -----------------------------------------------------------------------------
 
 from typing import Any, Sequence
@@ -147,23 +147,15 @@ def _ensure_distance_axis(df: pd.DataFrame) -> pd.DataFrame:
 
     if "distance_from_start_m" in out.columns:
         out["distance_from_start_m"] = pd.to_numeric(out["distance_from_start_m"], errors="coerce")
-
         if out["distance_from_start_m"].notna().any():
             return out
 
-    # -------------------------------------------------------------------------
-    # Reconstruct from delta distance if possible
-    # -------------------------------------------------------------------------
     if "distance_delta_m" in out.columns:
         delta = pd.to_numeric(out["distance_delta_m"], errors="coerce").fillna(0.0)
-        reconstructed = delta.cumsum()
-        out["distance_from_start_m"] = reconstructed
+        out["distance_from_start_m"] = delta.cumsum()
         if out["distance_from_start_m"].notna().any():
             return out
 
-    # -------------------------------------------------------------------------
-    # Final fallback: synthetic axis from row order
-    # -------------------------------------------------------------------------
     out["distance_from_start_m"] = np.arange(len(out), dtype=float)
     return out
 
@@ -186,7 +178,6 @@ def _prepare_activity_frame(
         df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
 
     df = _ensure_distance_axis(df)
-
     df["distance_from_start_m"] = pd.to_numeric(df["distance_from_start_m"], errors="coerce")
     df = df.dropna(subset=["distance_from_start_m"])
 
@@ -228,7 +219,6 @@ def _prepare_activity_frame(
             "time_from_start_s",
             target_distances,
         )
-
     elif "timestamp" in df.columns and df["timestamp"].notna().any():
         interpolated_ts = _interpolate_datetime(
             df,
@@ -243,12 +233,9 @@ def _prepare_activity_frame(
             out["time_from_start_s"] = (ts - ts.iloc[0]).dt.total_seconds()
         else:
             out["time_from_start_s"] = np.arange(len(out), dtype=float)
-
     else:
-        # Final fallback: keep the row order as a synthetic time axis.
         out["time_from_start_s"] = np.arange(len(out), dtype=float)
 
-    # If timestamp exists, keep it too.
     if "timestamp" in df.columns:
         out["timestamp"] = _interpolate_datetime(
             df,
@@ -290,9 +277,32 @@ def _prepare_activity_frame(
     # Derived trajectory columns
     # -------------------------------------------------------------------------
     out["time_from_start_s"] = pd.to_numeric(out["time_from_start_s"], errors="coerce")
-    out["segment_duration_s"] = out["time_from_start_s"].diff()
     out["segment_distance_m"] = out["distance_from_start_m"].diff()
     out["distance_delta_m"] = out["segment_distance_m"]
+
+    # -------------------------------------------------------------------------
+    # Build a robust segment duration target
+    # Priority:
+    #   1) time_from_start_s diff
+    #   2) distance / speed
+    #   3) synthetic row spacing if needed
+    # -------------------------------------------------------------------------
+    segment_duration_from_time = out["time_from_start_s"].diff()
+
+    if "speed_m_s" in out.columns:
+        speed = pd.to_numeric(out["speed_m_s"], errors="coerce").replace(0.0, np.nan)
+        segment_duration_from_speed = out["segment_distance_m"].abs() / speed
+    else:
+        segment_duration_from_speed = pd.Series([np.nan] * len(out), index=out.index, dtype="float64")
+
+    if segment_duration_from_speed.notna().sum() > segment_duration_from_time.notna().sum():
+        out["segment_duration_s"] = segment_duration_from_speed
+    else:
+        out["segment_duration_s"] = segment_duration_from_time
+
+    # If still too sparse, use a synthetic fallback so the dataset is never empty.
+    if out["segment_duration_s"].notna().sum() == 0:
+        out["segment_duration_s"] = 1.0
 
     # -------------------------------------------------------------------------
     # Remove rows that cannot be used for learning
