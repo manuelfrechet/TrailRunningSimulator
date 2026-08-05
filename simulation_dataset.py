@@ -3,13 +3,13 @@ from __future__ import annotations
 # -----------------------------------------------------------------------------
 # Simulation learning dataset builder
 # -----------------------------------------------------------------------------
-# This module builds a 50 m-aligned dataset from historical FIT-derived runner
-# feature tables.
+# This module builds a 50 m-aligned learning dataset from historical FIT-derived
+# runner feature tables.
 #
 # It is a bridge module:
 #   - training_dataset.py keeps the native-resolution historical data,
-#   - this module prepares the data that will teach the baseline simulator
-#     how a 50 m segment behaves.
+#   - this module prepares the data used to teach the baseline simulator how a
+#     50 m segment behaves.
 #
 # Version 1 goal:
 #   - resample each historical activity onto a fixed distance grid,
@@ -193,14 +193,15 @@ def _prepare_activity_frame(
     # -------------------------------------------------------------------------
     # Interpolate core time axis
     # -------------------------------------------------------------------------
-    if "time_from_start_s" in df.columns:
+    if "time_from_start_s" in df.columns and df["time_from_start_s"].notna().any():
         out["time_from_start_s"] = _interpolate_numeric(
             df,
             "distance_from_start_m",
             "time_from_start_s",
             target_distances,
         )
-    elif "timestamp" in df.columns:
+
+    elif "timestamp" in df.columns and df["timestamp"].notna().any():
         interpolated_ts = _interpolate_datetime(
             df,
             "distance_from_start_m",
@@ -208,12 +209,18 @@ def _prepare_activity_frame(
             target_distances,
         )
         out["timestamp"] = interpolated_ts
-        out["time_from_start_s"] = (
-            pd.to_datetime(out["timestamp"], errors="coerce")
-            - pd.to_datetime(out["timestamp"], errors="coerce").iloc[0]
-        ).dt.total_seconds()
 
-    # If both are present, keep the timestamp too.
+        ts = pd.to_datetime(out["timestamp"], errors="coerce")
+        if ts.notna().any():
+            out["time_from_start_s"] = (ts - ts.iloc[0]).dt.total_seconds()
+        else:
+            out["time_from_start_s"] = np.arange(len(out), dtype=float)
+
+    else:
+        # Final fallback: keep the row order as a synthetic time axis.
+        out["time_from_start_s"] = np.arange(len(out), dtype=float)
+
+    # If timestamp exists, keep it too.
     if "timestamp" in df.columns:
         out["timestamp"] = _interpolate_datetime(
             df,
@@ -256,9 +263,15 @@ def _prepare_activity_frame(
     # -------------------------------------------------------------------------
     # Derived trajectory columns
     # -------------------------------------------------------------------------
+    out["time_from_start_s"] = pd.to_numeric(out["time_from_start_s"], errors="coerce")
     out["segment_duration_s"] = out["time_from_start_s"].diff()
     out["segment_distance_m"] = out["distance_from_start_m"].diff()
     out["distance_delta_m"] = out["segment_distance_m"]
+
+    # -------------------------------------------------------------------------
+    # Remove rows that cannot be used for learning
+    # -------------------------------------------------------------------------
+    out = out.dropna(subset=["segment_duration_s"])
 
     # -------------------------------------------------------------------------
     # Derive terrain features consistently from the interpolated altitude
@@ -270,7 +283,6 @@ def _prepare_activity_frame(
         out["ascent_cumul_from_start_m"] = out["ascent_delta_m"].fillna(0.0).cumsum()
         out["descent_cumul_from_start_m"] = out["descent_delta_m"].fillna(0.0).cumsum()
 
-        # Avoid division by zero on the first segment.
         segment_distance = out["segment_distance_m"].replace(0.0, np.nan)
         out["grade_pct"] = (out["altitude_delta_m"] / segment_distance) * 100.0
     else:
@@ -365,4 +377,4 @@ def summarize_simulation_dataset(dataset: pd.DataFrame) -> dict[str, Any]:
     }
 
     return summary
-  
+    
