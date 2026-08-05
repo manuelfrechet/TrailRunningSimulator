@@ -316,7 +316,7 @@ else:
         race_length_km = float(gpx_raw_df["distance_from_start_m"].max()) / 1000.0
         expected_aid_stations = ceil(race_length_km / 10.0)
 
-        # ---------------------------------------------------------------------
+                # ---------------------------------------------------------------------
         # Aid-station input section
         # ---------------------------------------------------------------------
         with st.expander("Aid stations", expanded=True):
@@ -325,12 +325,12 @@ else:
                 f"suggested aid station slots: {expected_aid_stations}"
             )
 
-            default_aid_station_rows = pd.DataFrame(
-                {
-                    "aid_station_name": [""] * expected_aid_stations,
-                    "aid_station_km": [0.00] * expected_aid_stations,
-                }
-            )
+            # -------------------------------------------------------------
+            # Use explicit inputs instead of a data editor so tab navigation
+            # follows a natural order:
+            # aid_name_1 -> aid_km_1 -> aid_name_2 -> aid_km_2 -> ...
+            # -------------------------------------------------------------
+            aid_station_rows = []
 
             with st.form(key="aid_station_form"):
                 for i in range(expected_aid_stations):
@@ -352,26 +352,17 @@ else:
                             format="%.2f",
                             key=f"aid_km_{i}",
                         )
-            
-            #with st.form(key="aid_station_form"):
-            #    aid_station_input_df = st.data_editor(
-            #        default_aid_station_rows,
-            #        num_rows="fixed",
-            #        hide_index=True,
-            #        width="stretch",
-            #        column_config={
-            #            "aid_station_name": st.column_config.TextColumn(
-            #                "aid station name"
-            #            ),
-            #            "aid_station_km": st.column_config.NumberColumn(
-            #                "aid station km",
-            #                min_value=0.0,
-            #                max_value=race_length_km,
-            #                step=0.01,
-            #                format="%.2f"
-            #            ),
-            #        },
-            #    )
+
+                    # -------------------------------------------------
+                    # Keep only rows that have a non-empty name.
+                    # The cleaning function will remove anything invalid.
+                    # -------------------------------------------------
+                    aid_station_rows.append(
+                        {
+                            "aid_station_name": station_name,
+                            "aid_station_km": station_km,
+                        }
+                    )
 
                 submitted = st.form_submit_button("Build race profile")
 
@@ -379,8 +370,9 @@ else:
                 # -------------------------------------------------------------
                 # Clean aid station input
                 # -------------------------------------------------------------
+                aid_stations_df = pd.DataFrame(aid_station_rows)
                 aid_stations_df = _clean_aid_stations(
-                    aid_station_input_df,
+                    aid_stations_df,
                     race_length_km,
                 )
 
