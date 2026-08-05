@@ -10,6 +10,11 @@ from __future__ import annotations
 #   - predict the next state and segment duration,
 #   - accumulate total time,
 #   - return the predicted trajectory.
+#
+# Important stabilization rule:
+#   - the simulator does NOT feed its own predicted physiological state back
+#     into the next segment yet.
+#   - only deterministic race progression and terrain are carried forward.
 # -----------------------------------------------------------------------------
 
 from dataclasses import dataclass
@@ -35,18 +40,6 @@ class SimulationResult:
 # Helpers
 # -----------------------------------------------------------------------------
 
-TARGET_TO_STATE = {
-    "next_heart_rate_bpm": "heart_rate_bpm",
-    "next_power": "power",
-    "next_cadence_spm": "cadence_spm",
-    "next_speed_m_s": "speed_m_s",
-    "next_step_length_m": "step_length_m",
-    "next_vertical_oscillation_mm": "vertical_oscillation_mm",
-    "next_stance_time_s": "stance_time_s",
-    "next_accumulated_power": "accumulated_power",
-}
-
-
 def _ensure_required_columns(profile_df: pd.DataFrame) -> pd.DataFrame:
     if profile_df is None or profile_df.empty:
         return pd.DataFrame()
@@ -62,8 +55,8 @@ def _build_feature_row(
     current_state: dict[str, Any],
 ) -> dict[str, Any]:
     """
-    Merge the current dynamic state with the current race-profile row.
-    Race-profile values override the dynamic state for terrain-derived fields.
+    Merge the current deterministic/dynamic state with the current race-profile row.
+    Race-profile values override the state for terrain-derived fields.
     """
     row_dict = profile_row.to_dict()
     feature_row = dict(current_state)
@@ -80,7 +73,7 @@ def _prepare_current_state(model: TransitionModel) -> dict[str, Any]:
     # Race starts at zero elapsed time.
     current_state["time_from_start_s"] = 0.0
 
-    # Use the learned initial state for runner variables, but keep it safe.
+    # Safe defaults for runner variables if the learned initial state is sparse.
     for col in [
         "heart_rate_bpm",
         "power",
@@ -183,24 +176,22 @@ def simulate_race(
         out_row["predicted_cumulative_time_s"] = cumulative_time_s
         out_row["predicted_cumulative_time_hh:mm:ss"] = _format_hhmmss(cumulative_time_s)
 
-        # Store the raw predictions
+        # Store the raw predictions from the learned transition model.
         for target_col, value in predicted_state_updates.items():
             out_row[f"predicted_{target_col}"] = value
 
         output_rows.append(out_row)
 
         # ---------------------------------------------------------------------
-        # Update the dynamic state for the next segment
+        # Important stabilization rule
         # ---------------------------------------------------------------------
-        for target_col, state_col in TARGET_TO_STATE.items():
-            if target_col in predicted_state_updates:
-                current_state[state_col] = predicted_state_updates[target_col]
-
-        # Keep accumulated time updated for the next step.
+        # Do NOT feed predicted physiological values back into the next segment
+        # yet. This prevents runaway feedback in the first baseline version.
+        #
+        # We only carry deterministic progression and terrain forward.
+        # ---------------------------------------------------------------------
         current_state["time_from_start_s"] = cumulative_time_s
 
-        # Preserve the current terrain progression fields in the state so they
-        # can be available as context in the next prediction.
         for col in [
             "distance_from_start_m",
             "segment_distance_m",
