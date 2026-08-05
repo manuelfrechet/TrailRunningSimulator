@@ -184,7 +184,7 @@ if uploaded_fit_files:
         # Dataset preview
         # ---------------------------------------------------------
         with st.expander("Training dataset preview", expanded=False):
-            st.dataframe(training_dataset_df.head(200), width="stretch")
+            st.dataframe(training_dataset_df.head(50), width="stretch")
 
     else:
         st.warning(
