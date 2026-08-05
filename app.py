@@ -24,6 +24,7 @@ from gpx_segments import build_fixed_distance_segments, enhance_race_profile_wit
 from parser import parse_fit_to_tables
 from simulator import simulate_race, summarize_simulation
 from system_identification import fit_system_identification
+from simulation_dataset import build_simulation_dataset, summarize_simulation_dataset
 from training_dataset import activity_summary_table, build_training_dataset, summarize_training_dataset
 
 
@@ -201,16 +202,39 @@ if uploaded_fit_files:
                 st.dataframe(activity_summary_df, width="stretch")
 
         # ---------------------------------------------------------------------
-        # Fit the first baseline system identification model
+        # Build the 50 m-aligned simulation learning dataset
         # ---------------------------------------------------------------------
-        with st.spinner("Fitting baseline system-identification model..."):
-            try:
-                system_model = fit_system_identification(training_dataset_df)
-                st.session_state["system_model"] = system_model
-                st.success("Historical learning completed successfully.")
-            except Exception as exc:
-                st.session_state["system_model"] = None
-                st.error(f"System identification failed: {exc}")
+        simulation_learning_df = build_simulation_dataset(
+            training_frames,
+            activity_names=training_names,
+            segment_length_m=SEGMENT_LENGTH_M,
+        )
+
+        if simulation_learning_df.empty:
+            st.warning(
+                "The 50 m-aligned simulation learning dataset is empty. "
+                "The baseline model cannot be fitted yet."
+            )
+            st.session_state["system_model"] = None
+        else:
+            simulation_learning_summary = summarize_simulation_dataset(
+                simulation_learning_df
+            )
+
+            # -------------------------------------------------------------
+            # Fit the first baseline system identification model
+            # -------------------------------------------------------------
+            with st.spinner("Fitting baseline system-identification model..."):
+                try:
+                    system_model = fit_system_identification(simulation_learning_df)
+                    st.session_state["system_model"] = system_model
+                    st.success(
+                        "Historical learning completed successfully "
+                        f"on {simulation_learning_summary['n_rows']} 50 m samples."
+                    )
+                except Exception as exc:
+                    st.session_state["system_model"] = None
+                    st.error(f"System identification failed: {exc}")
 
     else:
         st.warning(
