@@ -15,7 +15,6 @@ PREFERRED_COLUMN_ORDER = [
 "ascent_cumul_from_start_m",
 "descent_cumul_from_start_m",
 "grade_pct",
-"Estimated_running_time",
 ]
 
 def _build_target_distances(max_distance_m: float, segment_length_m: float) -> List[float]:
@@ -98,7 +97,6 @@ def build_fixed_distance_segments(gpx_df: pd.DataFrame, segment_length_m: float 
   
       out = pd.DataFrame({"distance_from_start_m": target_distances})
       out["Key_break_points"] = ""
-      out["Estimated_running_time"] = pd.NA
   
       out["altitude_m"] = _interpolate_numeric(group, "altitude_m", target_distances)
       out["altitude_delta_m"] = out["altitude_m"].diff().fillna(0.0)
@@ -130,7 +128,6 @@ def build_fixed_distance_segments(gpx_df: pd.DataFrame, segment_length_m: float 
 def _interpolate_profile_row(reference_df: pd.DataFrame, distance_from_start_m: float) -> Dict[str, Any]:
   row: Dict[str, Any] = {
   "Key_break_points": "",
-  "Estimated_running_time": pd.NA,
   "distance_from_start_m": float(distance_from_start_m),
   }
   
@@ -140,7 +137,7 @@ def _interpolate_profile_row(reference_df: pd.DataFrame, distance_from_start_m: 
   )
   
   for col in reference.columns:
-      if col in {"distance_from_start_m", "Key_break_points", "Estimated_running_time"}:
+      if col in {"distance_from_start_m", "Key_break_points"}:
           continue
   
       if pd.api.types.is_numeric_dtype(reference[col]):
@@ -167,16 +164,12 @@ def enhance_race_profile_with_breakpoints(
         enhanced = race_profile_df.copy()
         if "Key_break_points" not in enhanced.columns:
             enhanced["Key_break_points"] = ""
-        if "Estimated_running_time" not in enhanced.columns:
-            enhanced["Estimated_running_time"] = pd.NA
         return enhanced
 
     base = race_profile_df.copy().sort_values("distance_from_start_m").reset_index(drop=True)
 
     if "Key_break_points" not in base.columns:
         base["Key_break_points"] = ""
-    if "Estimated_running_time" not in base.columns:
-        base["Estimated_running_time"] = pd.NA
 
     reference = base.copy().sort_values("distance_from_start_m").reset_index(drop=True)
 
