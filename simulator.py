@@ -168,6 +168,9 @@ def simulate_race(
         out_row["current_time_from_start_s"] = current_state.get("time_from_start_s", 0.0)
         out_row["predicted_segment_duration_s"] = predicted_duration_s
         out_row["predicted_cumulative_time_s"] = cumulative_time_s
+        out_row["predicted_cumulative_time_hh:mm:ss"] = str(
+            pd.to_timedelta(cumulative_time_s, unit="s")
+        )
 
         # Store the raw predictions
         for target_col, value in predicted_state_updates.items():
