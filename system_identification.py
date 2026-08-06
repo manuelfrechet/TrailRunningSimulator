@@ -21,7 +21,7 @@ import pandas as pd
 
 
 # -----------------------------------------------------------------------------
-# Columns and model conventions
+# Columns and conventions
 # -----------------------------------------------------------------------------
 
 METADATA_COLUMNS = {
@@ -108,10 +108,31 @@ def _dedupe_columns(df: pd.DataFrame) -> pd.DataFrame:
     """
     Remove duplicate columns while preserving the first occurrence.
     """
-    if df is None or df.empty:
-        return pd.DataFrame() if df is None else df.copy()
+    if df is None:
+        return pd.DataFrame()
+
+    if df.empty:
+        return df.copy()
 
     return df.loc[:, ~df.columns.duplicated()].copy()
+
+
+def _get_series(df: pd.DataFrame, col: str) -> pd.Series | None:
+    """
+    Return a 1D Series for a column, even if duplicate column names exist.
+    """
+    if df is None or df.empty or col not in df.columns:
+        return None
+
+    obj = df.loc[:, col]
+    if isinstance(obj, pd.DataFrame):
+        # If duplicate columns remain for any reason, keep the first one only.
+        obj = obj.iloc[:, 0]
+
+    if not isinstance(obj, pd.Series):
+        obj = pd.Series(obj, index=df.index)
+
+    return obj
 
 
 def _is_target_column(col: str) -> bool:
@@ -122,14 +143,19 @@ def _select_feature_columns(dataset: pd.DataFrame) -> list[str]:
     """
     Select numeric current-state columns used as inputs to the transition model.
     """
-    numeric_columns = [
-        col
-        for col in dataset.columns
-        if col not in METADATA_COLUMNS
-        and col not in DEBUG_COLUMNS
-        and not _is_target_column(col)
-        and pd.api.types.is_numeric_dtype(dataset[col])
-    ]
+    numeric_columns: list[str] = []
+
+    for col in dataset.columns:
+        if col in METADATA_COLUMNS or col in DEBUG_COLUMNS or _is_target_column(col):
+            continue
+
+        series = _get_series(dataset, col)
+        if series is None:
+            continue
+
+        numeric_series = pd.to_numeric(series, errors="coerce")
+        if numeric_series.notna().any():
+            numeric_columns.append(col)
 
     preferred_order = [
         # Terrain / progression
@@ -167,7 +193,15 @@ def _select_feature_columns(dataset: pd.DataFrame) -> list[str]:
     preferred = [col for col in preferred_order if col in numeric_columns]
     remaining = [col for col in numeric_columns if col not in preferred]
 
-    return preferred + remaining
+    # Remove duplicates while preserving order.
+    seen = set()
+    ordered: list[str] = []
+    for col in preferred + remaining:
+        if col not in seen:
+            ordered.append(col)
+            seen.add(col)
+
+    return ordered
 
 
 def _select_target_columns(dataset: pd.DataFrame) -> list[str]:
@@ -176,12 +210,16 @@ def _select_target_columns(dataset: pd.DataFrame) -> list[str]:
     """
     target_columns: list[str] = []
 
-    if PRIMARY_TARGET in dataset.columns and pd.api.types.is_numeric_dtype(dataset[PRIMARY_TARGET]):
-        target_columns.append(PRIMARY_TARGET)
+    if PRIMARY_TARGET in dataset.columns:
+        series = _get_series(dataset, PRIMARY_TARGET)
+        if series is not None and pd.to_numeric(series, errors="coerce").notna().any():
+            target_columns.append(PRIMARY_TARGET)
 
     for col in dataset.columns:
-        if col.startswith(TARGET_PREFIX) and pd.api.types.is_numeric_dtype(dataset[col]):
-            target_columns.append(col)
+        if col.startswith(TARGET_PREFIX):
+            series = _get_series(dataset, col)
+            if series is not None and pd.to_numeric(series, errors="coerce").notna().any():
+                target_columns.append(col)
 
     # Preserve order and avoid duplicates.
     seen = set()
@@ -206,13 +244,11 @@ def _prepare_feature_frame(
     X = pd.DataFrame(index=data.index)
 
     for col in feature_columns:
-        if col in data.columns:
-            series = data[col]
-            if isinstance(series, pd.DataFrame):
-                series = series.iloc[:, 0]
-            series = pd.to_numeric(series, errors="coerce")
-        else:
+        series = _get_series(data, col)
+        if series is None:
             series = pd.Series(np.nan, index=data.index, dtype="float64")
+        else:
+            series = pd.to_numeric(series, errors="coerce")
 
         mean_value = float(feature_means.get(col, 0.0))
         scale_value = float(feature_scales.get(col, 1.0))
@@ -300,15 +336,14 @@ def _compute_initial_state(dataset: pd.DataFrame, feature_columns: list[str]) ->
     initial_state: dict[str, float] = {}
 
     for col in feature_columns:
-        if col in first_rows.columns:
-            series = first_rows[col]
-            if isinstance(series, pd.DataFrame):
-                series = series.iloc[:, 0]
-            series = pd.to_numeric(series, errors="coerce")
-            value = series.mean()
-            initial_state[col] = float(value) if pd.notna(value) else 0.0
-        else:
+        series = _get_series(first_rows, col)
+        if series is None:
             initial_state[col] = 0.0
+            continue
+
+        series = pd.to_numeric(series, errors="coerce")
+        value = series.mean()
+        initial_state[col] = float(value) if pd.notna(value) else 0.0
 
     # Force a few obvious race-start values.
     if "time_from_start_s" in initial_state:
@@ -349,7 +384,15 @@ def fit_system_identification(
     # -------------------------------------------------------------------------
     # Clean feature matrix.
     # -------------------------------------------------------------------------
-    raw_features = working[feature_columns].apply(pd.to_numeric, errors="coerce")
+    raw_features = pd.DataFrame(index=working.index)
+
+    for col in feature_columns:
+        series = _get_series(working, col)
+        if series is None:
+            raw_features[col] = np.nan
+        else:
+            raw_features[col] = pd.to_numeric(series, errors="coerce")
+
     feature_means = raw_features.mean(axis=0, skipna=True)
     feature_scales = raw_features.std(axis=0, skipna=True).replace(0.0, 1.0)
 
@@ -359,6 +402,9 @@ def fit_system_identification(
     raw_features = raw_features[feature_columns]
     feature_means = feature_means[feature_columns]
     feature_scales = feature_scales[feature_columns].replace(0.0, 1.0)
+
+    if raw_features.empty or len(feature_columns) == 0:
+        raise ValueError("No valid feature columns remain after cleaning.")
 
     X_df = (raw_features.fillna(feature_means) - feature_means) / feature_scales
     X = X_df.to_numpy(dtype=float)
@@ -370,7 +416,11 @@ def fit_system_identification(
     target_metrics: dict[str, dict[str, float]] = {}
 
     for target in target_columns:
-        y_series = pd.to_numeric(working[target], errors="coerce")
+        y_series = _get_series(working, target)
+        if y_series is None:
+            continue
+
+        y_series = pd.to_numeric(y_series, errors="coerce")
         valid_mask = y_series.notna() & np.isfinite(X).all(axis=1)
 
         y = y_series.loc[valid_mask].to_numpy(dtype=float)
