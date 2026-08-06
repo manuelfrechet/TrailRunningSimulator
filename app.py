@@ -447,10 +447,11 @@ if uploaded_fit_files:
         # ---------------------------------------------------------------------
         # Build the 50 m-aligned simulation learning dataset
         # ---------------------------------------------------------------------
-        simulation_learning_df = build_simulation_dataset(
+        transition_learning_df = build_transition_dataset(
             training_frames,
             activity_names=training_names,
-            segment_length_m=SEGMENT_LENGTH_M,
+            grid_step_m=1.0,
+            transition_horizon_m=10.0,
         )
 
         if simulation_learning_df.empty:
