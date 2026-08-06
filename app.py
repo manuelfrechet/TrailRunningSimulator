@@ -709,7 +709,11 @@ else:
                             enhanced_race_profile_df,
                             st.session_state["system_model"],
                         )
+                        
                         st.session_state["simulation_result"] = simulation_result
+                        
+                        # Display the simulated profile (same normalized GPX + prediction columns)
+                        st.session_state["enhanced_race_profile_df"] = simulation_result.segments.copy()
                     except Exception as exc:
                         st.session_state["simulation_result"] = None
                         st.error(f"Simulation failed: {exc}")
