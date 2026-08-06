@@ -5,7 +5,7 @@ from __future__ import annotations
 # -----------------------------------------------------------------------------
 # Current responsibilities:
 #   1) Build the learning dataset from multiple historical FIT files.
-#   2) Build a 50 m-aligned learning dataset for the first baseline model.
+#   2) Build a rolling transition dataset for the first baseline model.
 #   3) Fit the first system-identification model.
 #   4) Build the future race profile from a GPX file and aid stations.
 #   5) Run a first baseline simulation on the normalized race profile.
@@ -22,10 +22,10 @@ from features import build_features
 from gpx_parser import parse_gpx_to_table
 from gpx_segments import build_fixed_distance_segments, enhance_race_profile_with_breakpoints
 from parser import parse_fit_to_tables
-from transition_dataset import build_transition_dataset,summarize_transition_dataset
 from simulator import simulate_race, summarize_simulation
 from system_identification import fit_system_identification
 from training_dataset import activity_summary_table, build_training_dataset, summarize_training_dataset
+from transition_dataset import build_transition_dataset, summarize_transition_dataset
 
 
 # -----------------------------------------------------------------------------
@@ -126,13 +126,13 @@ def _format_hhmmss(seconds: float) -> str:
 
 
 def _build_duration_model_diagnostics(
-    simulation_learning_df: pd.DataFrame,
+    transition_learning_df: pd.DataFrame,
     system_model,
 ) -> dict[str, pd.DataFrame]:
     """
     Build diagnostics for the segment-duration model.
     """
-    if simulation_learning_df is None or simulation_learning_df.empty:
+    if transition_learning_df is None or transition_learning_df.empty:
         return {}
 
     duration_model = system_model.target_models.get("segment_duration_s")
@@ -165,8 +165,6 @@ def _build_duration_model_diagnostics(
         "altitude_delta_m",
         "ascent_delta_m",
         "descent_delta_m",
-        "ascent_cumul_from_start_m",
-        "descent_cumul_from_start_m",
         "grade_pct",
         "heart_rate_bpm",
         "power",
@@ -180,17 +178,17 @@ def _build_duration_model_diagnostics(
 
     corr_rows = []
     for col in candidate_cols:
-        if col in simulation_learning_df.columns:
+        if col in transition_learning_df.columns:
             corr_rows.append(
                 {
                     "feature": col,
                     "corr_with_segment_duration_s": _safe_numeric_corr(
-                        simulation_learning_df,
+                        transition_learning_df,
                         col,
                         "segment_duration_s",
                     ),
                     "n_valid_rows": int(
-                        simulation_learning_df[[col, "segment_duration_s"]]
+                        transition_learning_df[[col, "segment_duration_s"]]
                         .dropna()
                         .shape[0]
                     ),
@@ -208,8 +206,8 @@ def _build_duration_model_diagnostics(
     # Segment duration by grade bins
     # -------------------------------------------------------------------------
     grade_df = pd.DataFrame()
-    if "grade_pct" in simulation_learning_df.columns:
-        grade_working = simulation_learning_df.copy()
+    if "grade_pct" in transition_learning_df.columns:
+        grade_working = transition_learning_df.copy()
         grade_working["grade_pct"] = pd.to_numeric(
             grade_working["grade_pct"], errors="coerce"
         )
@@ -251,7 +249,7 @@ def _build_duration_model_diagnostics(
     # -------------------------------------------------------------------------
     probe_rows = []
 
-    feature_reference = simulation_learning_df[duration_model.feature_columns].copy()
+    feature_reference = transition_learning_df[duration_model.feature_columns].copy()
     feature_reference = feature_reference.apply(pd.to_numeric, errors="coerce")
     medians = feature_reference.median(axis=0, skipna=True)
 
@@ -445,7 +443,7 @@ if uploaded_fit_files:
                 st.dataframe(activity_summary_df, width="stretch")
 
         # ---------------------------------------------------------------------
-        # Build the 50 m-aligned simulation learning dataset
+        # Build the rolling transition learning dataset
         # ---------------------------------------------------------------------
         transition_learning_df = build_transition_dataset(
             training_frames,
@@ -454,15 +452,15 @@ if uploaded_fit_files:
             transition_horizon_m=10.0,
         )
 
-        if simulation_learning_df.empty:
+        if transition_learning_df.empty:
             st.warning(
-                "The 50 m-aligned simulation learning dataset is empty. "
+                "The rolling transition learning dataset is empty. "
                 "The baseline model cannot be fitted yet."
             )
             st.session_state["system_model"] = None
         else:
-            simulation_learning_summary = summarize_simulation_dataset(
-                simulation_learning_df
+            transition_learning_summary = summarize_transition_dataset(
+                transition_learning_df
             )
 
             # -----------------------------------------------------------------
@@ -470,16 +468,16 @@ if uploaded_fit_files:
             # -----------------------------------------------------------------
             with st.spinner("Fitting baseline system-identification model..."):
                 try:
-                    system_model = fit_system_identification(simulation_learning_df)
+                    system_model = fit_system_identification(transition_learning_df)
                     st.session_state["system_model"] = system_model
 
                     st.success(
                         "Historical learning completed successfully "
-                        f"on {simulation_learning_summary['n_rows']} 50 m samples."
+                        f"on {transition_learning_summary['n_rows']} transition samples."
                     )
 
                     diagnostics = _build_duration_model_diagnostics(
-                        simulation_learning_df,
+                        transition_learning_df,
                         system_model,
                     )
 
@@ -502,9 +500,9 @@ if uploaded_fit_files:
                         st.subheader("Synthetic terrain probe")
                         st.dataframe(diagnostics["probe"], width="stretch")
 
-                        # -----------------------------------------------------------------
-                        # Export everything as one CSV so it can be shared easily
-                        # -----------------------------------------------------------------
+                        # -----------------------------------------------------
+                        # Export everything as one CSV so it can be shared
+                        # -----------------------------------------------------
                         diagnostics_export_df = _build_diagnostics_export_df(diagnostics)
 
                         if diagnostics_export_df.empty:
