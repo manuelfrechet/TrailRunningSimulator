@@ -9,10 +9,12 @@ from __future__ import annotations
 #   3) Fit the first system-identification model.
 #   4) Build the future race profile from a GPX file and aid stations.
 #   5) Run a first baseline simulation on the normalized race profile.
+#   6) Expose diagnostics for the duration model so we can debug it in detail.
 # -----------------------------------------------------------------------------
 
 from math import ceil
 
+import numpy as np
 import pandas as pd
 import streamlit as st
 
@@ -92,6 +94,234 @@ def _clean_aid_stations(editor_df: pd.DataFrame, race_length_km: float) -> pd.Da
     return aid_stations_df.reset_index(drop=True)
 
 
+def _safe_numeric_corr(df: pd.DataFrame, x_col: str, y_col: str) -> float:
+    """
+    Safe Pearson correlation for numeric columns.
+    """
+    if x_col not in df.columns or y_col not in df.columns:
+        return float("nan")
+
+    pair = df[[x_col, y_col]].copy()
+    pair[x_col] = pd.to_numeric(pair[x_col], errors="coerce")
+    pair[y_col] = pd.to_numeric(pair[y_col], errors="coerce")
+    pair = pair.dropna()
+
+    if len(pair) < 2:
+        return float("nan")
+
+    return float(pair[x_col].corr(pair[y_col]))
+
+
+def _format_hhmmss(seconds: float) -> str:
+    """
+    Format seconds as HH:MM:SS.
+    """
+    if seconds is None or not np.isfinite(seconds):
+        return ""
+
+    total_seconds = int(round(float(seconds)))
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, secs = divmod(remainder, 60)
+    return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+
+
+def _build_duration_model_diagnostics(
+    simulation_learning_df: pd.DataFrame,
+    system_model,
+) -> dict[str, pd.DataFrame]:
+    """
+    Build diagnostics for the segment-duration model.
+    """
+    if simulation_learning_df is None or simulation_learning_df.empty:
+        return {}
+
+    duration_model = system_model.target_models.get("segment_duration_s")
+    if duration_model is None:
+        return {}
+
+    # -------------------------------------------------------------------------
+    # Coefficients
+    # -------------------------------------------------------------------------
+    coeff_df = pd.DataFrame(
+        {
+            "feature": duration_model.feature_columns,
+            "coefficient": duration_model.coefficients,
+        }
+    )
+    coeff_df["abs_coefficient"] = coeff_df["coefficient"].abs()
+    coeff_df = coeff_df.sort_values("abs_coefficient", ascending=False).drop(
+        columns=["abs_coefficient"]
+    )
+
+    # -------------------------------------------------------------------------
+    # Correlations with observed segment duration
+    # -------------------------------------------------------------------------
+    candidate_cols = [
+        "time_from_start_s",
+        "distance_from_start_m",
+        "segment_distance_m",
+        "distance_delta_m",
+        "altitude_m",
+        "altitude_delta_m",
+        "ascent_delta_m",
+        "descent_delta_m",
+        "ascent_cumul_from_start_m",
+        "descent_cumul_from_start_m",
+        "grade_pct",
+        "heart_rate_bpm",
+        "power",
+        "cadence_spm",
+        "speed_m_s",
+        "step_length_m",
+        "vertical_oscillation_mm",
+        "stance_time_s",
+        "accumulated_power",
+    ]
+
+    corr_rows = []
+    for col in candidate_cols:
+        if col in simulation_learning_df.columns:
+            corr_rows.append(
+                {
+                    "feature": col,
+                    "corr_with_segment_duration_s": _safe_numeric_corr(
+                        simulation_learning_df,
+                        col,
+                        "segment_duration_s",
+                    ),
+                    "n_valid_rows": int(
+                        simulation_learning_df[[col, "segment_duration_s"]]
+                        .dropna()
+                        .shape[0]
+                    ),
+                }
+            )
+
+    corr_df = pd.DataFrame(corr_rows)
+    if not corr_df.empty:
+        corr_df["abs_corr"] = corr_df["corr_with_segment_duration_s"].abs()
+        corr_df = corr_df.sort_values("abs_corr", ascending=False).drop(
+            columns=["abs_corr"]
+        )
+
+    # -------------------------------------------------------------------------
+    # Segment duration by grade bins
+    # -------------------------------------------------------------------------
+    grade_df = pd.DataFrame()
+    if "grade_pct" in simulation_learning_df.columns:
+        grade_working = simulation_learning_df.copy()
+        grade_working["grade_pct"] = pd.to_numeric(
+            grade_working["grade_pct"], errors="coerce"
+        )
+
+        bins = [-np.inf, -15, -8, -4, -1, 1, 4, 8, 15, np.inf]
+        labels = [
+            "<= -15",
+            "-15 to -8",
+            "-8 to -4",
+            "-4 to -1",
+            "-1 to 1",
+            "1 to 4",
+            "4 to 8",
+            "8 to 15",
+            "> 15",
+        ]
+        grade_working["grade_bin"] = pd.cut(
+            grade_working["grade_pct"],
+            bins=bins,
+            labels=labels,
+            include_lowest=True,
+        )
+
+        grade_df = (
+            grade_working.groupby("grade_bin", observed=False)["segment_duration_s"]
+            .agg(["count", "mean", "median"])
+            .reset_index()
+            .rename(
+                columns={
+                    "count": "n",
+                    "mean": "mean_segment_duration_s",
+                    "median": "median_segment_duration_s",
+                }
+            )
+        )
+
+    # -------------------------------------------------------------------------
+    # Synthetic probe: flat vs uphill vs downhill
+    # -------------------------------------------------------------------------
+    probe_rows = []
+
+    feature_reference = simulation_learning_df[duration_model.feature_columns].copy()
+    feature_reference = feature_reference.apply(pd.to_numeric, errors="coerce")
+    medians = feature_reference.median(axis=0, skipna=True)
+
+    def make_probe(label: str, overrides: dict[str, float]) -> dict[str, float]:
+        row = medians.to_dict()
+        for key, value in overrides.items():
+            if key in duration_model.feature_columns:
+                row[key] = value
+        return {"scenario": label, **row}
+
+    flat_overrides = {}
+    uphill_overrides = {}
+    downhill_overrides = {}
+
+    for key in ["grade_pct", "altitude_delta_m", "ascent_delta_m", "descent_delta_m"]:
+        if key in duration_model.feature_columns:
+            if key == "grade_pct":
+                flat_overrides[key] = 0.0
+                uphill_overrides[key] = 10.0
+                downhill_overrides[key] = -10.0
+            elif key == "altitude_delta_m":
+                flat_overrides[key] = 0.0
+                uphill_overrides[key] = 5.0
+                downhill_overrides[key] = -5.0
+            elif key == "ascent_delta_m":
+                flat_overrides[key] = 0.0
+                uphill_overrides[key] = 5.0
+                downhill_overrides[key] = 0.0
+            elif key == "descent_delta_m":
+                flat_overrides[key] = 0.0
+                uphill_overrides[key] = 0.0
+                downhill_overrides[key] = 5.0
+
+    probe_rows.append(make_probe("flat", flat_overrides))
+    probe_rows.append(make_probe("uphill", uphill_overrides))
+    probe_rows.append(make_probe("downhill", downhill_overrides))
+
+    probe_df = pd.DataFrame(probe_rows)
+    probe_predictions = duration_model.predict(probe_df)
+    probe_df["predicted_segment_duration_s"] = probe_predictions.values
+    probe_df["predicted_segment_duration_hh:mm:ss"] = probe_df[
+        "predicted_segment_duration_s"
+    ].apply(_format_hhmmss)
+
+    # -------------------------------------------------------------------------
+    # Target summary
+    # -------------------------------------------------------------------------
+    target_summary_df = pd.DataFrame(
+        [
+            {
+                "n_samples": duration_model.metrics.get("n_samples", np.nan),
+                "r2": duration_model.metrics.get("r2", np.nan),
+                "mae": duration_model.metrics.get("mae", np.nan),
+                "rmse": duration_model.metrics.get("rmse", np.nan),
+            }
+        ]
+    )
+
+    return {
+        "coefficients": coeff_df,
+        "correlations": corr_df,
+        "grade_bins": grade_df,
+        "probe": probe_df,
+        "target_summary": target_summary_df,
+        "feature_columns": pd.DataFrame(
+            {"feature_columns_used_by_duration_model": duration_model.feature_columns}
+        ),
+    }
+
+
 # -----------------------------------------------------------------------------
 # Session state initialization
 # -----------------------------------------------------------------------------
@@ -167,9 +397,6 @@ if uploaded_fit_files:
             f"and {training_dataset_summary['n_rows']} rows into the training dataset."
         )
 
-        # ---------------------------------------------------------------------
-        # Training dataset summary
-        # ---------------------------------------------------------------------
         with st.expander("Training dataset summary", expanded=False):
             st.write(f"Activities: {training_dataset_summary['n_activities']}")
             st.write(f"Rows: {training_dataset_summary['n_rows']}")
@@ -190,9 +417,6 @@ if uploaded_fit_files:
                 for name in skipped_fit_files:
                     st.write(f"- {name}")
 
-        # ---------------------------------------------------------------------
-        # Per-activity summary
-        # ---------------------------------------------------------------------
         with st.expander("Activity summary", expanded=False):
             if activity_summary_df.empty:
                 st.warning("No per-activity summary could be built.")
@@ -226,10 +450,36 @@ if uploaded_fit_files:
                 try:
                     system_model = fit_system_identification(simulation_learning_df)
                     st.session_state["system_model"] = system_model
+
                     st.success(
                         "Historical learning completed successfully "
                         f"on {simulation_learning_summary['n_rows']} 50 m samples."
                     )
+
+                    diagnostics = _build_duration_model_diagnostics(
+                        simulation_learning_df,
+                        system_model,
+                    )
+
+                    with st.expander("Duration model diagnostics", expanded=False):
+                        st.subheader("Target summary")
+                        st.dataframe(diagnostics["target_summary"], width="stretch")
+
+                        st.subheader("Features used by the duration model")
+                        st.dataframe(diagnostics["feature_columns"], width="stretch")
+
+                        st.subheader("Top coefficients")
+                        st.dataframe(diagnostics["coefficients"], width="stretch")
+
+                        st.subheader("Correlations with segment duration")
+                        st.dataframe(diagnostics["correlations"], width="stretch")
+
+                        st.subheader("Segment duration by grade bin")
+                        st.dataframe(diagnostics["grade_bins"], width="stretch")
+
+                        st.subheader("Synthetic terrain probe")
+                        st.dataframe(diagnostics["probe"], width="stretch")
+
                 except Exception as exc:
                     st.session_state["system_model"] = None
                     st.error(f"System identification failed: {exc}")
@@ -263,18 +513,12 @@ uploaded_gpx = st.file_uploader(
 )
 
 if uploaded_gpx is None:
-    # -------------------------------------------------------------------------
-    # No GPX means no future race profile to build.
-    # -------------------------------------------------------------------------
     st.info("Upload a GPX file to build the future race profile.")
     st.session_state["enhanced_race_profile_df"] = None
     st.session_state["gpx_file_name"] = None
     st.session_state["simulation_result"] = None
 
 else:
-    # -------------------------------------------------------------------------
-    # Reset the stored race profile if a different GPX is uploaded.
-    # -------------------------------------------------------------------------
     if st.session_state["gpx_file_name"] != uploaded_gpx.name:
         st.session_state["enhanced_race_profile_df"] = None
         st.session_state["gpx_file_name"] = uploaded_gpx.name
@@ -298,9 +542,6 @@ else:
         st.warning("No GPX profile can be built because the raw GPX table is empty.")
 
     else:
-        # ---------------------------------------------------------------------
-        # Course length and aid-station planning
-        # ---------------------------------------------------------------------
         race_length_km = float(gpx_raw_df["distance_from_start_m"].max()) / 1000.0
         expected_aid_stations = ceil(race_length_km / 10.0)
 
@@ -313,11 +554,6 @@ else:
                 f"suggested aid station slots: {expected_aid_stations}"
             )
 
-            # -------------------------------------------------------------
-            # Use explicit inputs instead of a data editor so tab navigation
-            # follows a natural order:
-            # aid_name_1 -> aid_km_1 -> aid_name_2 -> aid_km_2 -> ...
-            # -------------------------------------------------------------
             aid_station_rows = []
 
             with st.form(key="aid_station_form"):
@@ -341,9 +577,6 @@ else:
                             key=f"aid_km_{i}",
                         )
 
-                    # -------------------------------------------------
-                    # Keep every row; cleaning will remove invalid ones.
-                    # -------------------------------------------------
                     aid_station_rows.append(
                         {
                             "aid_station_name": station_name,
@@ -354,9 +587,6 @@ else:
                 submitted = st.form_submit_button("Build race profile")
 
             if submitted:
-                # -------------------------------------------------------------
-                # Clean aid station input
-                # -------------------------------------------------------------
                 aid_stations_df = _clean_aid_stations(
                     pd.DataFrame(aid_station_rows),
                     race_length_km,
@@ -368,9 +598,6 @@ else:
                 else:
                     st.dataframe(aid_stations_df, width="stretch")
 
-                # -------------------------------------------------------------
-                # Build normalized race profile
-                # -------------------------------------------------------------
                 gpx_segments_df = build_fixed_distance_segments(
                     gpx_raw_df,
                     segment_length_m=SEGMENT_LENGTH_M,
@@ -383,9 +610,6 @@ else:
 
                 st.session_state["enhanced_race_profile_df"] = enhanced_race_profile_df
 
-                # -------------------------------------------------------------
-                # Run the first baseline simulation
-                # -------------------------------------------------------------
                 if st.session_state["system_model"] is None:
                     st.warning(
                         "No learned model is available yet. Upload FIT files first "
