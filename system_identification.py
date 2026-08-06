@@ -5,12 +5,12 @@ from __future__ import annotations
 # -----------------------------------------------------------------------------
 # This module learns transition laws from the replay-based transition dataset.
 #
-# Version 1 goal:
-#   - select current-state numeric features,
+# Version 2 goal:
+#   - use only physical state and terrain features for prediction,
+#   - exclude replay bookkeeping variables such as elapsed time, distance,
+#     and zone counters from the regression inputs,
 #   - fit one ridge-regularized linear model per transition target,
 #   - expose a reusable model that predicts segment duration and next state.
-#
-# The simulator uses the learned transition law step by step.
 # -----------------------------------------------------------------------------
 
 from dataclasses import dataclass
@@ -41,6 +41,33 @@ DEBUG_COLUMNS = {
     "mechanical_decay_term",
     "neuromuscular_build_term",
     "neuromuscular_decay_term",
+}
+
+# Replay bookkeeping columns that should NOT be used as regression inputs.
+BOOKKEEPING_COLUMNS = {
+    "distance_from_start_m",
+    "time_from_start_s",
+    "segment_distance_m",
+    "transition_horizon_m",
+    "time_in_zone_1",
+    "time_in_zone_2",
+    "time_in_zone_3",
+    "time_in_zone_4",
+    "time_in_zone_5",
+    "time_in_zone_6",
+    "fraction_time_in_zone_1",
+    "fraction_time_in_zone_2",
+    "fraction_time_in_zone_3",
+    "fraction_time_in_zone_4",
+    "fraction_time_in_zone_5",
+    "fraction_time_in_zone_6",
+    "continuous_time_spend_in_zone_1",
+    "continuous_time_spend_in_zone_2",
+    "continuous_time_spend_in_zone_3",
+    "continuous_time_spend_in_zone_4",
+    "continuous_time_spend_in_zone_5",
+    "continuous_time_spend_in_zone_6",
+    "accumulated_power",
 }
 
 
@@ -110,10 +137,8 @@ def _dedupe_columns(df: pd.DataFrame) -> pd.DataFrame:
     """
     if df is None:
         return pd.DataFrame()
-
     if df.empty:
         return df.copy()
-
     return df.loc[:, ~df.columns.duplicated()].copy()
 
 
@@ -126,7 +151,6 @@ def _get_series(df: pd.DataFrame, col: str) -> pd.Series | None:
 
     obj = df.loc[:, col]
     if isinstance(obj, pd.DataFrame):
-        # If duplicate columns remain for any reason, keep the first one only.
         obj = obj.iloc[:, 0]
 
     if not isinstance(obj, pd.Series):
@@ -142,11 +166,16 @@ def _is_target_column(col: str) -> bool:
 def _select_feature_columns(dataset: pd.DataFrame) -> list[str]:
     """
     Select numeric current-state columns used as inputs to the transition model.
+
+    We keep only physical state and terrain variables, and deliberately exclude
+    replay bookkeeping variables like distance/time counters and zone timers.
     """
     numeric_columns: list[str] = []
 
     for col in dataset.columns:
         if col in METADATA_COLUMNS or col in DEBUG_COLUMNS or _is_target_column(col):
+            continue
+        if col in BOOKKEEPING_COLUMNS:
             continue
 
         series = _get_series(dataset, col)
@@ -157,18 +186,13 @@ def _select_feature_columns(dataset: pd.DataFrame) -> list[str]:
         if numeric_series.notna().any():
             numeric_columns.append(col)
 
+    # Physical / terrain features we want to keep.
     preferred_order = [
-        # Terrain / progression
-        "distance_from_start_m",
-        "time_from_start_s",
-        "segment_distance_m",
-        "altitude_m",
+        # Terrain forcing
+        "grade_pct",
         "altitude_delta_m",
         "ascent_delta_m",
         "descent_delta_m",
-        "ascent_cumul_from_start_m",
-        "descent_cumul_from_start_m",
-        "grade_pct",
         "terrain_technicality",
         # Runner state
         "heart_rate_bpm",
@@ -178,7 +202,6 @@ def _select_feature_columns(dataset: pd.DataFrame) -> list[str]:
         "step_length_m",
         "vertical_oscillation_mm",
         "stance_time_s",
-        "accumulated_power",
         # Hidden state / fatigue
         "current_hr_zone",
         "cardiovascular_debt",
@@ -186,14 +209,9 @@ def _select_feature_columns(dataset: pd.DataFrame) -> list[str]:
         "neuromuscular_debt",
     ]
 
-    preferred_order.extend([f"time_in_zone_{i}" for i in range(1, 7)])
-    preferred_order.extend([f"fraction_time_in_zone_{i}" for i in range(1, 7)])
-    preferred_order.extend([f"continuous_time_spend_in_zone_{i}" for i in range(1, 7)])
-
     preferred = [col for col in preferred_order if col in numeric_columns]
     remaining = [col for col in numeric_columns if col not in preferred]
 
-    # Remove duplicates while preserving order.
     seen = set()
     ordered: list[str] = []
     for col in preferred + remaining:
@@ -221,7 +239,6 @@ def _select_target_columns(dataset: pd.DataFrame) -> list[str]:
             if series is not None and pd.to_numeric(series, errors="coerce").notna().any():
                 target_columns.append(col)
 
-    # Preserve order and avoid duplicates.
     seen = set()
     ordered_unique: list[str] = []
     for col in target_columns:
@@ -346,10 +363,14 @@ def _compute_initial_state(dataset: pd.DataFrame, feature_columns: list[str]) ->
         initial_state[col] = float(value) if pd.notna(value) else 0.0
 
     # Force a few obvious race-start values.
-    if "time_from_start_s" in initial_state:
-        initial_state["time_from_start_s"] = 0.0
-    if "distance_from_start_m" in initial_state:
-        initial_state["distance_from_start_m"] = 0.0
+    if "current_hr_zone" in initial_state:
+        initial_state["current_hr_zone"] = 1.0
+    if "cardiovascular_debt" in initial_state:
+        initial_state["cardiovascular_debt"] = 0.0
+    if "mechanical_debt" in initial_state:
+        initial_state["mechanical_debt"] = 0.0
+    if "neuromuscular_debt" in initial_state:
+        initial_state["neuromuscular_debt"] = 0.0
 
     return initial_state
 
