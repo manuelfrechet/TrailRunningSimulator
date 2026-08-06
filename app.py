@@ -39,6 +39,34 @@ SEGMENT_LENGTH_M = 50.0
 # Small helpers
 # -----------------------------------------------------------------------------
 
+def _dedupe_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Remove duplicate columns while preserving the first occurrence.
+    """
+    if df is None:
+        return pd.DataFrame()
+    if df.empty:
+        return df.copy()
+    return df.loc[:, ~df.columns.duplicated()].copy()
+
+
+def _get_series(df: pd.DataFrame, col: str) -> pd.Series | None:
+    """
+    Return a 1D Series for a column, even if duplicate column names exist.
+    """
+    if df is None or df.empty or col not in df.columns:
+        return None
+
+    obj = df.loc[:, col]
+    if isinstance(obj, pd.DataFrame):
+        obj = obj.iloc[:, 0]
+
+    if not isinstance(obj, pd.Series):
+        obj = pd.Series(obj, index=df.index)
+
+    return obj
+
+
 def _load_fit_activity(uploaded_file):
     """
     Load one FIT file and convert it to a standardized runner feature dataframe.
@@ -98,21 +126,27 @@ def _safe_numeric_corr(df: pd.DataFrame, x_col: str, y_col: str) -> float:
     """
     Safe Pearson correlation for numeric columns.
     """
-    if x_col not in df.columns or y_col not in df.columns:
+    if df is None or df.empty:
         return float("nan")
 
-    pair = df[[x_col, y_col]].copy()
-    pair[x_col] = pd.to_numeric(pair[x_col], errors="coerce")
-    pair[y_col] = pd.to_numeric(pair[y_col], errors="coerce")
-    pair = pair.dropna()
+    x_series = _get_series(df, x_col)
+    y_series = _get_series(df, y_col)
+
+    if x_series is None or y_series is None:
+        return float("nan")
+
+    x = pd.to_numeric(x_series, errors="coerce")
+    y = pd.to_numeric(y_series, errors="coerce")
+
+    pair = pd.DataFrame({"x": x, "y": y}).dropna()
 
     if len(pair) < 2:
         return float("nan")
 
-    if pair[x_col].std(ddof=0) == 0 or pair[y_col].std(ddof=0) == 0:
+    if pair["x"].std(ddof=0) == 0 or pair["y"].std(ddof=0) == 0:
         return float("nan")
 
-    return float(pair[x_col].corr(pair[y_col]))
+    return float(pair["x"].corr(pair["y"]))
 
 
 def _format_hhmmss(seconds: float) -> str:
@@ -141,6 +175,9 @@ def _build_duration_model_diagnostics(
     duration_model = system_model.target_models.get("segment_duration_s")
     if duration_model is None:
         return {}
+
+    # Make sure we are working with a clean dataframe.
+    transition_learning_df = _dedupe_columns(transition_learning_df)
 
     # -------------------------------------------------------------------------
     # Coefficients
@@ -256,7 +293,7 @@ def _build_duration_model_diagnostics(
     # -------------------------------------------------------------------------
     probe_rows = []
 
-    feature_reference = transition_learning_df[duration_model.feature_columns].copy()
+    feature_reference = transition_learning_df.loc[:, duration_model.feature_columns].copy()
     feature_reference = feature_reference.apply(pd.to_numeric, errors="coerce")
     medians = feature_reference.median(axis=0, skipna=True)
 
@@ -482,10 +519,19 @@ if uploaded_fit_files:
                         "Historical learning completed successfully "
                         f"on {transition_learning_summary['n_rows']} transition samples."
                     )
+                except Exception as exc:
+                    st.session_state["system_model"] = None
+                    st.error(f"System identification failed: {exc}")
 
+            # -----------------------------------------------------------------
+            # Diagnostics are helpful, but they should not kill the app
+            # if one of the tables has an issue.
+            # -----------------------------------------------------------------
+            if st.session_state["system_model"] is not None:
+                try:
                     diagnostics = _build_duration_model_diagnostics(
                         transition_learning_df,
-                        system_model,
+                        st.session_state["system_model"],
                     )
 
                     with st.expander("Duration model diagnostics", expanded=False):
@@ -522,10 +568,8 @@ if uploaded_fit_files:
                                 mime="text/csv",
                                 use_container_width=True,
                             )
-
-                except Exception as exc:
-                    st.session_state["system_model"] = None
-                    st.error(f"System identification failed: {exc}")
+                except Exception as diag_exc:
+                    st.warning(f"Diagnostics could not be generated: {diag_exc}")
 
     else:
         st.session_state["system_model"] = None
