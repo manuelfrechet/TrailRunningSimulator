@@ -322,6 +322,27 @@ def _build_duration_model_diagnostics(
     }
 
 
+def _build_diagnostics_export_df(diagnostics: dict[str, pd.DataFrame]) -> pd.DataFrame:
+    """
+    Combine all diagnostics tables into one long CSV-friendly dataframe.
+    """
+    frames: list[pd.DataFrame] = []
+
+    for table_name, df in diagnostics.items():
+        if not isinstance(df, pd.DataFrame) or df.empty:
+            continue
+
+        out = df.copy()
+        out.insert(0, "table_name", table_name)
+        out.insert(1, "row_in_table", range(1, len(out) + 1))
+        frames.append(out)
+
+    if not frames:
+        return pd.DataFrame()
+
+    return pd.concat(frames, ignore_index=True, sort=False)
+
+
 # -----------------------------------------------------------------------------
 # Session state initialization
 # -----------------------------------------------------------------------------
@@ -479,6 +500,22 @@ if uploaded_fit_files:
 
                         st.subheader("Synthetic terrain probe")
                         st.dataframe(diagnostics["probe"], width="stretch")
+
+                        # -----------------------------------------------------------------
+                        # Export everything as one CSV so it can be shared easily
+                        # -----------------------------------------------------------------
+                        diagnostics_export_df = _build_diagnostics_export_df(diagnostics)
+
+                        if diagnostics_export_df.empty:
+                            st.warning("No diagnostics available to export.")
+                        else:
+                            st.download_button(
+                                label="Download diagnostics CSV",
+                                data=diagnostics_export_df.to_csv(index=False),
+                                file_name="duration_model_diagnostics.csv",
+                                mime="text/csv",
+                                use_container_width=True,
+                            )
 
                 except Exception as exc:
                     st.session_state["system_model"] = None
