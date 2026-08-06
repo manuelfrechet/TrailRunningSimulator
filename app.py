@@ -493,7 +493,7 @@ if uploaded_fit_files:
             training_frames,
             activity_names=training_names,
             grid_step_m=1.0,
-            transition_horizon_m=10.0,
+            transition_horizon_m=50.0,
         )
 
         if transition_learning_df.empty:
