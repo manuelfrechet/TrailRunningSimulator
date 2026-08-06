@@ -3,12 +3,12 @@ from __future__ import annotations
 # -----------------------------------------------------------------------------
 # System identification layer
 # -----------------------------------------------------------------------------
-# This module learns a first transition model from the transition dataset.
+# This module learns transition laws from the replay-based transition dataset.
 #
 # Version 1 goal:
 #   - select the current-state numeric features,
 #   - fit one ridge-regularized linear model per transition target,
-#   - expose a reusable model that predicts the next state.
+#   - expose a reusable model that predicts segment duration and next state.
 #
 # The simulator will use this learned transition law step by step.
 # -----------------------------------------------------------------------------
@@ -31,17 +31,26 @@ METADATA_COLUMNS = {
     "timestamp",
 }
 
-TARGET_COLUMNS = [
-    "segment_duration_s",
-    "next_heart_rate_bpm",
-    "next_power",
-    "next_cadence_spm",
-    "next_speed_m_s",
-    "next_step_length_m",
-    "next_vertical_oscillation_mm",
-    "next_stance_time_s",
-    "next_accumulated_power",
-]
+# Targets we would like to learn if present in the dataset.
+# segment_duration_s is the main target.
+# next_* targets are the state transition targets.
+TARGET_PREFIX = "next_"
+PRIMARY_TARGET = "segment_duration_s"
+
+# Columns that are clearly diagnostic / debug terms from replay and should not
+# be used as inputs to the transition models.
+DEBUG_COLUMNS = {
+    "cardio_build_term",
+    "cardio_decay_term",
+    "mechanical_build_term",
+    "mechanical_decay_term",
+    "neuromuscular_build_term",
+    "neuromuscular_decay_term",
+}
+
+# Columns that should never be used as features because they are targets.
+def _is_target_column(col: str) -> bool:
+    return col == PRIMARY_TARGET or col.startswith(TARGET_PREFIX)
 
 
 # -----------------------------------------------------------------------------
@@ -102,21 +111,28 @@ class TransitionModel:
 def _select_feature_columns(dataset: pd.DataFrame) -> list[str]:
     """
     Select numeric current-state columns used as inputs to the transition model.
+
+    Rules:
+      - numeric only
+      - exclude metadata
+      - exclude all targets (segment_duration_s and next_*)
+      - exclude replay debug columns
     """
     numeric_columns = [
         col
         for col in dataset.columns
         if col not in METADATA_COLUMNS
-        and col not in TARGET_COLUMNS
-        and not col.startswith("next_")
+        and col not in DEBUG_COLUMNS
+        and not _is_target_column(col)
         and pd.api.types.is_numeric_dtype(dataset[col])
     ]
 
+    # Keep a sensible order, but remain generic.
     preferred_order = [
-        "time_from_start_s",
+        # Terrain / progression
         "distance_from_start_m",
+        "time_from_start_s",
         "segment_distance_m",
-        "distance_delta_m",
         "altitude_m",
         "altitude_delta_m",
         "ascent_delta_m",
@@ -124,6 +140,8 @@ def _select_feature_columns(dataset: pd.DataFrame) -> list[str]:
         "ascent_cumul_from_start_m",
         "descent_cumul_from_start_m",
         "grade_pct",
+        "terrain_technicality",
+        # Runner state
         "heart_rate_bpm",
         "power",
         "cadence_spm",
@@ -132,12 +150,47 @@ def _select_feature_columns(dataset: pd.DataFrame) -> list[str]:
         "vertical_oscillation_mm",
         "stance_time_s",
         "accumulated_power",
+        # Hidden state / fatigue
+        "current_hr_zone",
+        "cardiovascular_debt",
+        "mechanical_debt",
+        "neuromuscular_debt",
     ]
+
+    # Zone exposure counters are also useful features.
+    preferred_order.extend([f"time_in_zone_{i}" for i in range(1, 7)])
+    preferred_order.extend([f"fraction_time_in_zone_{i}" for i in range(1, 7)])
+    preferred_order.extend([f"continuous_time_spend_in_zone_{i}" for i in range(1, 7)])
 
     preferred = [col for col in preferred_order if col in numeric_columns]
     remaining = [col for col in numeric_columns if col not in preferred]
 
     return preferred + remaining
+
+
+def _select_target_columns(dataset: pd.DataFrame) -> list[str]:
+    """
+    Select target columns dynamically from the dataset.
+    """
+    target_columns: list[str] = []
+
+    if PRIMARY_TARGET in dataset.columns and pd.api.types.is_numeric_dtype(dataset[PRIMARY_TARGET]):
+        target_columns.append(PRIMARY_TARGET)
+
+    # Any next_* numeric column is treated as a transition target.
+    for col in dataset.columns:
+        if col.startswith(TARGET_PREFIX) and pd.api.types.is_numeric_dtype(dataset[col]):
+            target_columns.append(col)
+
+    # Preserve order, avoid duplicates.
+    seen = set()
+    ordered_unique: list[str] = []
+    for col in target_columns:
+        if col not in seen:
+            ordered_unique.append(col)
+            seen.add(col)
+
+    return ordered_unique
 
 
 def _prepare_feature_frame(
@@ -177,7 +230,6 @@ def _fit_ridge_linear_model(
     """
     if X.ndim != 2:
         raise ValueError("X must be a 2D matrix.")
-
     if len(y) == 0:
         raise ValueError("y is empty.")
 
@@ -198,6 +250,9 @@ def _fit_ridge_linear_model(
 
 
 def _compute_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, float]:
+    """
+    Compute simple fit metrics.
+    """
     if len(y_true) == 0:
         return {
             "r2": float("nan"),
@@ -225,10 +280,8 @@ def _compute_initial_state(dataset: pd.DataFrame, feature_columns: list[str]) ->
     Estimate a race-start state from the first row of each activity.
     """
     if "activity_id" in dataset.columns:
-        first_rows = dataset.sort_values(
-            [c for c in ["activity_id", "time_from_start_s", "distance_from_start_m", "sample_id"] if c in dataset.columns],
-            kind="mergesort",
-        ).groupby("activity_id", sort=True).head(1)
+        sort_cols = [c for c in ["activity_id", "distance_from_start_m", "time_from_start_s", "sample_id"] if c in dataset.columns]
+        first_rows = dataset.sort_values(sort_cols, kind="mergesort").groupby("activity_id", sort=True).head(1)
     else:
         first_rows = dataset.head(1)
 
@@ -246,7 +299,7 @@ def _compute_initial_state(dataset: pd.DataFrame, feature_columns: list[str]) ->
         initial_state["time_from_start_s"] = 0.0
 
     if "distance_from_start_m" in initial_state:
-        initial_state["distance_from_start_m"] = float(first_rows["distance_from_start_m"].mean()) if "distance_from_start_m" in first_rows.columns else 0.0
+        initial_state["distance_from_start_m"] = 0.0
 
     return initial_state
 
@@ -257,27 +310,26 @@ def _compute_initial_state(dataset: pd.DataFrame, feature_columns: list[str]) ->
 
 def fit_system_identification(
     dataset: pd.DataFrame,
-    target_column: str = "segment_duration_s",
+    target_column: str = PRIMARY_TARGET,
 ) -> TransitionModel:
     """
-    Fit a first discrete transition model from the transition dataset.
-
-    The model learns current-state -> next-state mappings.
+    Fit transition models from the replay-based transition dataset.
     """
     if dataset is None or dataset.empty:
         raise ValueError("dataset is empty.")
 
     working = dataset.copy()
 
-    if target_column not in working.columns:
-        raise ValueError(f"target column '{target_column}' is missing from dataset.")
-
     # -------------------------------------------------------------------------
-    # Select feature columns.
+    # Select features and targets.
     # -------------------------------------------------------------------------
     feature_columns = _select_feature_columns(working)
     if not feature_columns:
         raise ValueError("No usable numeric feature columns found.")
+
+    target_columns = _select_target_columns(working)
+    if not target_columns:
+        raise ValueError("No usable target columns found.")
 
     # -------------------------------------------------------------------------
     # Clean feature matrix.
@@ -286,7 +338,7 @@ def fit_system_identification(
     feature_means = raw_features.mean(axis=0, skipna=True)
     feature_scales = raw_features.std(axis=0, skipna=True).replace(0.0, 1.0)
 
-    # Remove columns that are entirely empty.
+    # Remove empty columns.
     keep_columns = [col for col in raw_features.columns if raw_features[col].notna().any()]
     feature_columns = keep_columns
     raw_features = raw_features[feature_columns]
@@ -302,10 +354,7 @@ def fit_system_identification(
     target_models: dict[str, LinearTargetModel] = {}
     target_metrics: dict[str, dict[str, float]] = {}
 
-    for target in TARGET_COLUMNS:
-        if target not in working.columns:
-            continue
-
+    for target in target_columns:
         y_series = pd.to_numeric(working[target], errors="coerce")
         valid_mask = y_series.notna() & np.isfinite(X).all(axis=1)
 
@@ -340,10 +389,10 @@ def fit_system_identification(
         )
 
     if not target_models:
-        raise ValueError("No usable target columns were found for system identification.")
+        raise ValueError("No usable targets could be fitted.")
 
     # -------------------------------------------------------------------------
-    # Estimate initial state from the start of historical activities.
+    # Estimate initial state from the beginning of historical activities.
     # -------------------------------------------------------------------------
     initial_state = _compute_initial_state(working, feature_columns)
 
