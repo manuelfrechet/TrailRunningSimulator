@@ -7,14 +7,14 @@ from __future__ import annotations
 # reconstructs a hidden state at each dense distance step, and can then extract
 # rolling transition samples.
 #
-# Version 1 principles:
+# Version 2 principles:
 #   - replay the activity on a dense distance grid (default 1 m),
 #   - reconstruct hidden state sequentially from all prior history,
 #   - expose hidden state variables explicitly,
-#   - build rolling transition samples over a fixed horizon (default 10 m).
+#   - build rolling transition samples over a fixed horizon (default 50 m).
 #
 # The code is intentionally transparent and configurable so it can later be used
-# as the foundation for system identification.
+# as the foundation for system identification or trajectory matching.
 # -----------------------------------------------------------------------------
 
 from dataclasses import dataclass, field
@@ -29,7 +29,7 @@ import pandas as pd
 # -----------------------------------------------------------------------------
 
 DEFAULT_GRID_STEP_M = 1.0
-DEFAULT_TRANSITION_HORIZON_M = 10.0
+DEFAULT_TRANSITION_HORIZON_M = 50.0
 
 OBSERVED_STATE_COLUMNS = [
     "heart_rate_bpm",
@@ -188,12 +188,11 @@ def _order_columns(columns: Sequence[str]) -> list[str]:
     columns = list(columns)
     preferred = (
         ["activity_id", "activity_name", "sample_id"]
-        + REPLAY_OUTPUT_COLUMNS
+        + list(REPLAY_OUTPUT_COLUMNS)
         + [col for col in OBSERVED_STATE_COLUMNS if f"next_{col}" in columns]
         + [col for col in HIDDEN_STATE_COLUMNS if f"next_{col}" in columns]
     )
 
-    # Keep any "next_*" columns together in the end.
     preferred += [
         "segment_distance_m",
         "segment_duration_s",
@@ -232,7 +231,9 @@ def _safe_float(value: Any, default: float = np.nan) -> float:
     Convert a value to float when possible.
     """
     try:
-        if value is None or (isinstance(value, float) and not np.isfinite(value)):
+        if value is None:
+            return default
+        if isinstance(value, float) and not np.isfinite(value):
             return default
         return float(value)
     except Exception:
@@ -502,8 +503,6 @@ def _update_zone_counters(
     if delta_time_s > 0:
         state.time_in_zone[zone_index] += delta_time_s
 
-    # Continuous time in zone: if the runner stays in the same zone, accumulate.
-    # If the zone changes, start a new continuous spell.
     if state.current_hr_zone == current_zone:
         state.continuous_time_in_zone[zone_index] += max(0.0, delta_time_s)
     else:
@@ -540,7 +539,6 @@ def _make_state_row(
     """
     out: dict[str, Any] = {}
 
-    # Copy observed terrain and runner values.
     for col in TERRAIN_COLUMNS + OBSERVED_STATE_COLUMNS:
         if col in row.index:
             out[col] = row[col]
@@ -551,7 +549,6 @@ def _make_state_row(
     out["neuromuscular_debt"] = float(max(0.0, state.neuromuscular_debt))
     out["terrain_technicality"] = float(technicality)
 
-    # Debug terms help later when we inspect the replay.
     out["cardio_build_term"] = float(cardio_build)
     out["cardio_decay_term"] = float(cardio_decay)
     out["mechanical_build_term"] = float(mechanical_build)
@@ -588,18 +585,15 @@ def replay_activity(
 
     hr_rest, hr_max = _resolve_hr_bounds(source, config)
 
-    # Dense interpolation grid.
     max_distance_m = float(source["distance_from_start_m"].max())
     dense_distances = np.arange(0.0, max_distance_m + config.grid_step_m * 0.5, config.grid_step_m)
     dense = pd.DataFrame({"distance_from_start_m": dense_distances})
 
     # Interpolate time axis.
     if "time_from_start_s" in source.columns and source["time_from_start_s"].notna().any():
-        dense["time_from_start_s"] = np.interp(
-            dense_distances.astype(float),
-            pd.to_numeric(source["distance_from_start_m"], errors="coerce").to_numpy(dtype=float),
-            pd.to_numeric(source["time_from_start_s"], errors="coerce").to_numpy(dtype=float),
-        )
+        x_vals = pd.to_numeric(source["distance_from_start_m"], errors="coerce").to_numpy(dtype=float)
+        y_vals = pd.to_numeric(source["time_from_start_s"], errors="coerce").to_numpy(dtype=float)
+        dense["time_from_start_s"] = np.interp(dense_distances.astype(float), x_vals, y_vals)
     elif "timestamp" in source.columns and source["timestamp"].notna().any():
         ts_source = source[["distance_from_start_m", "timestamp"]].copy()
         ts_source["distance_from_start_m"] = pd.to_numeric(ts_source["distance_from_start_m"], errors="coerce")
@@ -617,7 +611,7 @@ def replay_activity(
     else:
         dense["time_from_start_s"] = np.arange(len(dense), dtype=float)
 
-    # Interpolate useful numeric columns from the source.
+    # Interpolate useful numeric columns.
     for col in [
         "altitude_m",
         "power",
@@ -655,7 +649,6 @@ def replay_activity(
     )
     dense["grade_pct"] = dense["grade_pct"].replace([np.inf, -np.inf], np.nan).fillna(0.0)
 
-    # Replay sequentially.
     state = ReplayState()
     rows: list[dict[str, Any]] = []
 
@@ -680,7 +673,6 @@ def replay_activity(
             previous_zone=state.current_hr_zone,
         )
 
-        # Update zone exposure counters before computing the debt terms.
         _update_zone_counters(state, current_zone, delta_time_s)
         zone_fraction = _compute_zone_fractions(state)
 
@@ -710,7 +702,6 @@ def replay_activity(
             config=config,
         )
 
-        # Update hidden debts.
         state.cardiovascular_debt = max(
             0.0,
             state.cardiovascular_debt + delta_time_s * (cardio_build - cardio_decay),
@@ -724,7 +715,6 @@ def replay_activity(
             state.neuromuscular_debt + delta_time_s * (neuromuscular_build - neuromuscular_decay),
         )
 
-        # Update last observed runner variables.
         state.prev_speed_m_s = _safe_float(row_series.get("speed_m_s"), np.nan)
         state.prev_cadence_spm = _safe_float(row_series.get("cadence_spm"), np.nan)
         state.prev_step_length_m = _safe_float(row_series.get("step_length_m"), np.nan)
@@ -781,32 +771,36 @@ def build_transition_samples(
 
     out = current.copy()
 
-    # Metadata for transitions.
     out["transition_horizon_m"] = float(config.transition_horizon_m)
     out["segment_distance_m"] = float(config.transition_horizon_m)
 
-    # Segment duration target.
     out["segment_duration_s"] = (
         pd.to_numeric(future["time_from_start_s"], errors="coerce").to_numpy(dtype=float)
         - pd.to_numeric(current["time_from_start_s"], errors="coerce").to_numpy(dtype=float)
     )
 
-    # Next hidden state targets.
     for col in HIDDEN_STATE_COLUMNS:
         if col in current.columns and col in future.columns:
             out[f"next_{col}"] = future[col].to_numpy()
 
-    # Next observed state targets.
     for col in OBSERVED_STATE_COLUMNS:
         if col in current.columns and col in future.columns:
             out[f"next_{col}"] = future[col].to_numpy()
 
-    # Next terrain / progression columns.
-    for col in ["distance_from_start_m", "time_from_start_s", "altitude_m", "altitude_delta_m", "ascent_delta_m", "descent_delta_m", "ascent_cumul_from_start_m", "descent_cumul_from_start_m", "grade_pct"]:
+    for col in [
+        "distance_from_start_m",
+        "time_from_start_s",
+        "altitude_m",
+        "altitude_delta_m",
+        "ascent_delta_m",
+        "descent_delta_m",
+        "ascent_cumul_from_start_m",
+        "descent_cumul_from_start_m",
+        "grade_pct",
+    ]:
         if col in current.columns and col in future.columns and f"next_{col}" not in out.columns:
             out[f"next_{col}"] = future[col].to_numpy()
 
-    # Clean up.
     out = out.replace([np.inf, -np.inf], np.nan)
     out["segment_duration_s"] = pd.to_numeric(out["segment_duration_s"], errors="coerce")
     out = out.dropna(subset=["segment_duration_s"])
@@ -913,4 +907,4 @@ def build_transition_dataset_from_replay(
     out = pd.concat(frames, ignore_index=True)
     out = out[_order_columns(out.columns)]
     return out
-  
+    
