@@ -22,7 +22,7 @@ from features import build_features
 from gpx_parser import parse_gpx_to_table
 from gpx_segments import build_fixed_distance_segments, enhance_race_profile_with_breakpoints
 from parser import parse_fit_to_tables
-from simulation_dataset import build_simulation_dataset, summarize_simulation_dataset
+from transition_dataset import build_transition_dataset,summarize_transition_dataset
 from simulator import simulate_race, summarize_simulation
 from system_identification import fit_system_identification
 from training_dataset import activity_summary_table, build_training_dataset, summarize_training_dataset
