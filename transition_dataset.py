@@ -32,7 +32,7 @@ from replay_engine import (
 # -----------------------------------------------------------------------------
 
 DEFAULT_GRID_STEP_M = 1.0
-DEFAULT_TRANSITION_HORIZON_M = 10.0
+DEFAULT_TRANSITION_HORIZON_M = 50.0
 
 
 # -----------------------------------------------------------------------------
@@ -106,8 +106,6 @@ def summarize_transition_dataset(dataset: pd.DataFrame) -> dict[str, Any]:
 
 # -----------------------------------------------------------------------------
 # Convenience re-exports
-# -----------------------------------------------------------------------------
-# These are kept here so the app and later modules can import from one place.
 # -----------------------------------------------------------------------------
 
 __all__ = [
