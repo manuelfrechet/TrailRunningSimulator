@@ -109,6 +109,9 @@ def _safe_numeric_corr(df: pd.DataFrame, x_col: str, y_col: str) -> float:
     if len(pair) < 2:
         return float("nan")
 
+    if pair[x_col].std(ddof=0) == 0 or pair[y_col].std(ddof=0) == 0:
+        return float("nan")
+
     return float(pair[x_col].corr(pair[y_col]))
 
 
@@ -174,6 +177,10 @@ def _build_duration_model_diagnostics(
         "vertical_oscillation_mm",
         "stance_time_s",
         "accumulated_power",
+        "current_hr_zone",
+        "cardiovascular_debt",
+        "mechanical_debt",
+        "neuromuscular_debt",
     ]
 
     corr_rows = []
